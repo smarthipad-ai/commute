@@ -369,8 +369,8 @@ def active(m, windows):
 
 def radar(d, evening):
     # the map itself is built in the browser from RainViewer's live frames, so it is fresh whenever you open the page
-    la, lo = home_coords()
-    return Sec("📡", "Rain radar", ["Live radar on the brief page"], kind="radar", data=dict(lat=la, lon=lo), ping=[])
+    la, lo = home_coords()  # the page is public: centre on the city (0.1° is about 10 km), never on the exact address
+    return Sec("📡", "Rain radar", ["Live radar on the brief page"], kind="radar", data=dict(lat=round(la, 1), lon=round(lo, 1)), ping=[])
 
 
 def bike(d, evening):

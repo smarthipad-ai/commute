@@ -292,24 +292,27 @@ summary{{list-style:none;cursor:pointer;padding:14px 16px}}summary::-webkit-deta
 
 
 def publish(html, path="index.html"):
-    # gh-pages holds the live page and the morning brief, so update one file and keep the rest
+    # gh-pages holds the live page and the morning brief: update one file, keep the rest, and keep a single commit
+    # (so nothing old lingers in a public history). --force-with-lease makes a push that raced another workflow fail and retry.
     remote = E("GH_REMOTE")
     if not remote:
         out = "commute.html" if path == "index.html" else path.replace("/", "_")
         open(out, "w").write(html); print("wrote", out); return
     for attempt in range(3):
         with tempfile.TemporaryDirectory() as d:
-            git = lambda *a: subprocess.run(["git", *a], cwd=d, check=True, capture_output=True)
-            if subprocess.run(["git", "clone", "-q", "--depth", "1", "-b", "gh-pages", remote, d], capture_output=True).returncode:
+            git = lambda *a: subprocess.run(["git", *a], cwd=d, check=True, capture_output=True, text=True)
+            have = subprocess.run(["git", "clone", "-q", "--depth", "1", "-b", "gh-pages", remote, d], capture_output=True).returncode == 0
+            if have:
+                head = git("rev-parse", "HEAD").stdout.strip()
+            else:
                 git("init", "-q", "-b", "gh-pages")
             os.makedirs(os.path.dirname(f"{d}/{path}"), exist_ok=True)
             open(f"{d}/{path}", "w").write(html); open(f"{d}/.nojekyll", "w").close()
-            git("add", ".")
-            if not subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=d).returncode:
+            if have and not git("status", "--porcelain").stdout.strip():
                 return
-            git("commit", "-qm", f"update {path}")
+            git("checkout", "-q", "--orphan", "fresh"); git("add", "-A"); git("commit", "-qm", f"update {path}")
             try:
-                git("push", "-q", remote, "gh-pages"); return
+                git("push", "-q", *(["--force-with-lease=gh-pages:" + head] if have else ["-f"]), remote, "fresh:gh-pages"); return
             except subprocess.CalledProcessError:  # the other workflow pushed first; start over from its version
                 if attempt == 2:
                     raise

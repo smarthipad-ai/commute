@@ -440,7 +440,6 @@ main{max-width:640px;margin:-34px auto 0;padding:0 14px 44px;position:relative}
 @media (prefers-color-scheme:dark){.mapbar{background:rgba(23,24,27,.88);color:#eee}}
 .mapbar button{all:unset;cursor:pointer;width:26px;height:26px;border-radius:50%;background:var(--rain);color:#fff;display:grid;place-items:center;font-size:11px}
 .prog2{flex:1;height:4px;border-radius:3px;background:rgba(120,120,120,.3);overflow:hidden}.prog2 i{display:block;height:100%;width:0;background:var(--rain);transition:width .3s linear}
-.home{width:14px;height:14px;border-radius:50%;background:#f43f5e;border:3px solid #fff;box-shadow:0 0 0 0 rgba(244,63,94,.6);animation:ping 2s infinite}@keyframes ping{70%,100%{box-shadow:0 0 0 14px rgba(244,63,94,0)}}
 /* calendar, bins, notes */
 .timeline{list-style:none;margin:10px 0 0;padding:0}.timeline li{display:grid;grid-template-columns:52px 1fr;gap:2px 12px;padding:8px 0 8px 14px;border-left:3px solid var(--line);position:relative}
 .timeline li:before{content:"";position:absolute;left:-7px;top:13px;width:11px;height:11px;border-radius:50%;background:var(--card);border:3px solid var(--rain)}
@@ -507,7 +506,6 @@ function radar(el){
   el.innerHTML='';const map=L.map(el,{zoomControl:false,scrollWheelZoom:false,attributionControl:true}).setView([lat,lon],8);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:10,className:'basemap',attribution:'© OpenStreetMap · radar RainViewer'}).addTo(map);
   const layers=fr.map(f=>L.tileLayer(meta.host+f.path+'/256/{z}/{x}/{y}/2/1_1.png',{opacity:0,maxNativeZoom:7,maxZoom:10,zIndex:5}).addTo(map));
-  L.marker([lat,lon],{icon:L.divIcon({className:'',html:'<div class="home"></div>',iconSize:[14,14]})}).addTo(map);
   const bar=document.createElement('div');bar.className='mapbar';bar.innerHTML='<button aria-label="Play or pause">❚❚</button><span class="tm"></span><div class="prog2"><i></i></div>';el.appendChild(bar);
   L.DomEvent.disableClickPropagation(bar);const btn=bar.firstChild,tm=$('.tm',bar)[0],pr=$('i',bar)[0];let i=fr.length-1,play=!rm,timer;
   const show=k=>{layers.forEach((l,j)=>l.setOpacity(j===k?.72:0));const t=new Date(fr[k].time*1e3);tm.textContent=t.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+(fr[k].time*1e3>Date.now()+3e5?' · forecast':'');pr.style.width=((k+1)/fr.length*100)+'%'};
