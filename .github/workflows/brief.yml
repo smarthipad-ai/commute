@@ -37,6 +37,7 @@ jobs:
           REMINDERS: ${{ secrets.REMINDERS }}
           GCAL_ICS: ${{ secrets.GCAL_ICS }}
           FES_ICS: ${{ secrets.FES_ICS }}
+          WATCHLIST: ${{ secrets.WATCHLIST }}
           FX: ${{ vars.FX || 'INR' }}
           PAGE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
           GH_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git

@@ -1,22 +1,25 @@
 """Morning brief at 06:45 on weekdays, plus an evening heads-up for tomorrow.
 
 Each section is a function f(d, evening) returning a Sec (or None to stay quiet).
-To add one, write the function and put it in SECTIONS. A section that throws
-shows as "unavailable" instead of sinking the whole brief.
+To add one, write the function, put it in SECTIONS and, if it needs a custom look,
+add a renderer for its `kind` in brief_ui.py. A section that throws shows as
+"unavailable" instead of sinking the whole brief.
 
 Optional secrets: REMINDERS (see reminders()), GCAL_ICS (Google Calendar secret
-iCal address), FES_ICS (FrankfurtPlus bin calendar iCal link), FX (e.g. "INR").
+iCal address), FES_ICS (FrankfurtPlus bin calendar iCal link), WATCHLIST
+(e.g. "SAP.DE:SAP, ^GDAXI:DAX, BTC-EUR:Bitcoin"), FX (e.g. "INR,USD").
 """
-import json, re, sys, time
+import json, math, re, sys, time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from functools import cache
-from html import escape
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 import commute as c
+from brief_data import BINS, QUOTES, WORDS
+from brief_ui import icon, page
 from commute import E, PM, T, TZ, get, hapi, holiday, hm, lookup, mins, now, place, trips
 
 SEND, LEAVE, LATEST, EVENING = E("BRIEF_AT", "06:45"), E("BRIEF_LEAVE", "07:30"), "09:00", E("EVENING_AT", "20:00")
@@ -28,65 +31,19 @@ DESC = {0: "Clear", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast", 45: "F
         80: "Showers", 81: "Showers", 82: "Heavy showers", 85: "Snow showers", 86: "Snow showers",
         95: "Thunderstorm", 96: "Thunderstorm, hail", 99: "Thunderstorm, hail"}
 OCC = {11: "quiet", 12: "moderate", 13: "busy", 14: "packed"}
-BINS = {"rest": ("Restmüll", "#4b4b4b"), "papier": ("Paper", "#2f6fd1"), "bio": ("Bio", "#8a5a2b"),
-        "lvp": ("Packaging", "#e2b400"), "verpack": ("Packaging", "#e2b400"), "gelb": ("Packaging", "#e2b400"),
-        "sperr": ("Bulky waste", "#7a6a9a"), "grün": ("Garden waste", "#3f8f3a"), "glas": ("Glass", "#2a9d8f")}
-QUOTES = [
-    ("Morgenstund hat Gold im Mund. — The morning hour has gold in its mouth.", "German proverb"),
-    ("Waste no more time arguing about what a good man should be. Be one.", "Marcus Aurelius"),
-    ("Very little is needed to make a happy life.", "Marcus Aurelius"),
-    ("It is not that we have a short time to live, but that we waste a lot of it.", "Seneca"),
-    ("While we are postponing, life speeds by.", "Seneca"),
-    ("Begin at once to live, and count each separate day as a separate life.", "Seneca"),
-    ("Difficulties strengthen the mind, as labour does the body.", "Seneca"),
-    ("First say to yourself what you would be; and then do what you have to do.", "Epictetus"),
-    ("No man is free who is not master of himself.", "Epictetus"),
-    ("The journey of a thousand miles begins with a single step.", "Lao Tzu"),
-    ("Well begun is half done.", "Aristotle"),
-    ("Knowing is not enough; we must apply. Willing is not enough; we must do.", "Goethe"),
-    ("Aller Anfang ist schwer. — Every beginning is hard.", "German proverb"),
-    ("Übung macht den Meister. — Practice makes the master.", "German proverb"),
-    ("Do what you can, with what you have, where you are.", "Theodore Roosevelt"),
-    ("Energy and persistence conquer all things.", "Benjamin Franklin"),
-    ("Lost time is never found again.", "Benjamin Franklin"),
-    ("Well done is better than well said.", "Benjamin Franklin"),
-    ("One today is worth two tomorrows.", "Benjamin Franklin"),
-    ("Never leave that till tomorrow which you can do today.", "Benjamin Franklin"),
-    ("Write it on your heart that every day is the best day in the year.", "Ralph Waldo Emerson"),
-    ("Nothing great was ever achieved without enthusiasm.", "Ralph Waldo Emerson"),
-    ("He who has a why to live can bear almost any how.", "Friedrich Nietzsche"),
-    ("Opportunities multiply as they are seized.", "Sun Tzu"),
-    ("The secret of success is constancy to purpose.", "Benjamin Disraeli"),
-    ("Genius is one percent inspiration and ninety-nine percent perspiration.", "Thomas Edison"),
-    ("Heaven never helps the man who will not act.", "Sophocles"),
-    ("Fortune favours the bold.", "Terence"),
-    ("Carpe diem. — Seize the day.", "Horace"),
-    ("Per aspera ad astra. — Through hardships to the stars.", "Latin proverb"),
-    ("Dum spiro, spero. — While I breathe, I hope.", "Latin proverb"),
-    ("Fall seven times, stand up eight.", "Japanese proverb"),
-    ("Little by little, one travels far.", "Spanish proverb"),
-    ("Be not afraid of going slowly; be afraid only of standing still.", "Chinese proverb"),
-    ("If you want to go fast, go alone. If you want to go far, go together.", "African proverb"),
-    ("A smooth sea never made a skilled sailor.", "English proverb"),
-    ("Rome wasn't built in a day.", "English proverb"),
-    ("The early bird catches the worm.", "English proverb"),
-]
+SYNODIC = 29.530588853
 
 
 @dataclass
 class Sec:
     icon: str
     title: str
-    lines: list = field(default_factory=list)  # plain text, used for the ping and the page
+    lines: list = field(default_factory=list)  # plain text; the page's fallback and the notification
     head: str = None  # short piece for the notification title
     tone: str = "info"  # info / ok / warn / bad; warn and bad make the evening heads-up worth sending
-    html: str = None  # custom card body; otherwise lines are rendered
-    data: dict = None  # extra values the page hero uses
-
-
-def icon(code):
-    return ("☀️" if code <= 1 else "⛅" if code == 2 else "☁️" if code <= 48 else "🌦" if code <= 57
-            else "🌧" if code <= 67 or 80 <= code <= 82 else "🌨" if code <= 86 else "⛈")
+    kind: str = "text"  # picks the renderer in brief_ui
+    data: dict = None  # structured values for that renderer
+    ping: list = None  # notification lines; None = use lines, [] = leave out
 
 
 def retry(f, tries=4):
@@ -99,8 +56,8 @@ def retry(f, tries=4):
             time.sleep(5 * 2 ** n)
 
 
-def fetch(url):
-    return json.loads(retry(lambda: get(url, headers=UA)))
+def fetch(url, **headers):
+    return json.loads(retry(lambda: get(url, headers={**UA, **headers})))
 
 
 def dt(s):
@@ -217,28 +174,55 @@ def reminders(d, evening=False):
                     out.append(("⏳", f"{n} day{'s' * (n != 1)} until {text}", "countdown"))
             elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", key) and date.fromisoformat(key) == d:
                 out.append(("📌", text, "once"))
-            else:
-                continue
         except ValueError:  # e.g. 2026-02-30; skip just this line
             print("bad reminder line:", raw)
     return out
 
 
 @cache
+def wiki_feed(d):
+    # one Wikimedia call feeds the photo, "on this day" and the featured article
+    try:
+        return fetch(f"https://api.wikimedia.org/feed/v1/wikipedia/en/featured/{d:%Y/%m/%d}")
+    except Exception as e:
+        print("wikimedia feed failed:", e)
+        return {}
+
+
+def clean(x, n=None):
+    x = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", x or "")).strip()
+    return x if not n or len(x) <= n else x[:n].rsplit(" ", 1)[0] + "…"
+
+
+@cache
 def picture(d):
     # Wikimedia Commons picture of the day (freely licensed; credit shown on the page)
     try:
-        i = fetch(f"https://api.wikimedia.org/feed/v1/wikipedia/en/featured/{d:%Y/%m/%d}")["image"]
+        i = wiki_feed(d)["image"]
         url = re.sub(r"/\d+px-", "/1280px-", i["thumbnail"]["source"].split("?")[0]) if i["image"]["width"] > 1280 else i["image"]["source"]
         return dict(url=url, thumb=i["thumbnail"]["source"].split("?")[0], page=i["file_page"],
-                    credit=re.sub(r"\s+", " ", (i.get("artist") or {}).get("text") or "Wikimedia Commons").strip(),
-                    license=(i.get("license") or {}).get("type", ""), about=re.sub(r"\s+", " ", (i.get("description") or {}).get("text", "")).strip()[:140])
+                    credit=clean((i.get("artist") or {}).get("text")) or "Wikimedia Commons",
+                    license=(i.get("license") or {}).get("type", ""), about=clean((i.get("description") or {}).get("text"), 140))
     except Exception:
         return None
 
 
 def quote_of(d):
     return QUOTES[d.toordinal() % len(QUOTES)]
+
+
+def moon_phase(local):
+    # 0 = new, 0.5 = full; days since a known new moon, modulo the synodic month
+    utc = local.replace(tzinfo=TZ).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+    return ((utc - datetime(2000, 1, 6, 18, 14)).total_seconds() / 86400 % SYNODIC) / SYNODIC
+
+
+def moon_name(f):
+    for upto, name in ((.03, "New moon"), (.22, "Waxing crescent"), (.28, "First quarter"), (.47, "Waxing gibbous"),
+                       (.53, "Full moon"), (.72, "Waning gibbous"), (.78, "Last quarter"), (.97, "Waning crescent")):
+        if f < upto:
+            return name
+    return "New moon"
 
 
 # --- sections ---------------------------------------------------------------
@@ -248,18 +232,47 @@ def weather(d, evening):
     slots = hourly(forecast(), d, "07:00", "19:00", "temperature_2m", "precipitation_probability", "weather_code")
     codes = [s[3] for s in slots]
     code = max(set(codes), key=codes.count)  # what most of the waking day looks like, not the overnight worst
-    lines = []
+    lines, cur = [], None
     if d == now().date():
-        cur = forecast()["current"]
-        lines.append(f"Now {round(cur['temperature_2m'])}°, feels {round(cur['apparent_temperature'])}° · {DESC.get(cur['weather_code'], '')}")
+        f = forecast()["current"]
+        cur = dict(temp=f["temperature_2m"], feels=f["apparent_temperature"], code=f["weather_code"])
+        lines.append(f"Now {round(cur['temp'])}°, feels {round(cur['feels'])}° · {DESC.get(cur['code'], '')}")
     walk, _ = rain(d, LEAVE, "09:00")
     lines.append(f"{'Tomorrow' if evening else 'Today'} {round(lo)}°–{round(hi)}°, {DESC.get(code, '').lower()} · morning walk {walk}")
-    strip = "".join(f'<div class="hr"><span>{t:%H}</span><b>{icon(w)}</b><span class="tp">{round(tp)}°</span>'
-                    f'<i style="--p:{p or 0}%"></i><span class="rp">{p or 0}%</span></div>' for t, tp, p, w in slots[::2])
-    s = Sec(icon(code), "Weather", lines, f"{icon(code)} {round(lo)}°→{round(hi)}°")
-    s.html = f'<p class="big">{escape(lines[-1])}</p>{"".join(f"<p>{escape(x)}</p>" for x in lines[:-1])}<div class="strip">{strip}</div>'
-    s.data = dict(code=code, lo=lo, hi=hi, uv=uv)
-    return s
+    data = dict(code=code, desc=DESC.get(code, ""), lo=lo, hi=hi, uv=uv, now=cur, walk=walk,
+                slots=[(t.isoformat(), tp, p or 0, w) for t, tp, p, w in slots], sentence=lines[-1])
+    return Sec(icon(code), "Weather", lines, f"{icon(code)} {round(lo)}°→{round(hi)}°", kind="weather", data=data)
+
+
+def sky(d, evening):
+    rise, set_ = (datetime.fromisoformat(daily(d, k)) for k in ("sunrise", "sunset"))
+    length = set_ - rise
+    lines = [f"Sunrise {T(rise)} · sunset {T(set_)} · {length.seconds // 3600}h {length.seconds % 3600 // 60:02d}m of daylight"]
+    delta = None
+    try:  # tomorrow's day length is in the forecast for today..today+2
+        nxt = datetime.fromisoformat(daily(d + timedelta(1), "sunset")) - datetime.fromisoformat(daily(d + timedelta(1), "sunrise"))
+        delta = round((nxt - length).total_seconds() / 60)
+    except ValueError:
+        pass
+    ping = list(lines)
+    clock = []
+    for k in range(1, 5):  # clocks change at 2–3am on a Sunday; warn from the Thursday before
+        a, b = datetime.combine(d + timedelta(k - 1), datetime.min.time(), TZ), datetime.combine(d + timedelta(k), datetime.min.time(), TZ)
+        if a.utcoffset() != b.utcoffset():
+            back = b.utcoffset() < a.utcoffset()
+            clock.append(f"⏰ Clocks go {'back' if back else 'forward'} 1 hour early on {(d + timedelta(k - 1)):%a %d %b} — "
+                         + ("an extra hour of sleep" if back else "one hour less sleep"))
+    f = moon_phase(hm(d, "20:00"))
+    full = d + timedelta(round(((0.5 - f) % 1) * SYNODIC))
+    new = d + timedelta(round(((0 - f) % 1) * SYNODIC))
+    name = moon_name(f)
+    moon = dict(f=f, name=name, illum=round((1 - math.cos(2 * math.pi * f)) / 2 * 100), full=full.isoformat(), new=new.isoformat())
+    lines.append(f"{name}, {moon['illum']}% lit")
+    if name in ("Full moon", "New moon"):
+        ping.append(f"{'🌕' if name == 'Full moon' else '🌑'} {name} tonight")
+    data = dict(rise=rise.isoformat(), set=set_.isoformat(), minutes=round(length.total_seconds() / 60), delta=delta, moon=moon, clock=clock,
+                now=now().isoformat() if d == now().date() and not evening else None)
+    return Sec("🌅", "Sky", lines + clock, kind="sky", data=data, ping=ping + clock)
 
 
 def dwd_warnings(d, evening):
@@ -270,20 +283,22 @@ def dwd_warnings(d, evening):
         if on <= hm(d, "20:00") and off >= hm(d, "06:00"):
             out.append(f"{a.get('headline_en') or a.get('headline_de')} ({T(on)}–{T(off)})")
             tone = "bad" if a.get("severity") in ("severe", "extreme") else tone
-    return Sec("🚨", "Weather warning", out, "🚨 warning", tone) if out else None
+    return Sec("🚨", "Weather warning", out, "🚨 warning", tone, "alert") if out else None
 
 
 def frost(d, evening):
     cold = min(hourly(forecast(), d, "06:00", "09:00", "temperature_2m"), key=lambda s: s[1])
     if cold[1] > 1:
         return None
-    return Sec("🧊", "Frost", [f"{round(cold[1])}° at {T(cold[0])} — icy pavements and platforms possible, allow extra time"], "🧊 frost", "warn")
+    return Sec("🧊", "Frost", [f"{round(cold[1])}° at {T(cold[0])} — icy pavements and platforms possible, allow extra time"], "🧊 frost", "warn", "alert")
 
 
 def way_home(d, evening):
     text, wet = rain(d, PM[0], "18:00")
+    slots = hourly(forecast(), d, PM[0], "18:00", "precipitation_probability", "temperature_2m")
     return Sec("☂️" if wet else "🌤", "Way home", [f"Way home ({PM[0]}–18:00): {text}" + (" — take an umbrella" if wet else "")],
-               "☂️ umbrella" if wet else None, "warn" if wet else "ok")
+               "☂️ umbrella" if wet else None, "warn" if wet else "ok", "rainhome",
+               dict(wet=wet, text=text, slots=[(t.isoformat(), p or 0, tp) for t, p, tp in slots]))
 
 
 def train(d, evening):
@@ -291,27 +306,35 @@ def train(d, evening):
     if not opts:
         return Sec("🚆", f"Leaving at {LEAVE}", [f"RMV returned no connections leaving {LEAVE}."], f"⚠️ no trains from {LEAVE}", "bad")
     show = opts[:2] + ([rec] if rec and rec not in opts[:2] else [])  # backup: the first clean trip if the first two have problems
-    lines, rows = [], []
+    lines, trips_ = [], []
     for m in show:
         rides = ", ".join(f"{r['name']} {T(r['dep'])}" + (f" pl. {r['track']}" if r["track"] else "")
                           + (f" ({OCC[r['occ']]})" if r.get("occ") in OCC else "") for r in m["rides"])
         flag = "⚠ " + " ".join(m["issues"][0][::2]) if m["issues"] else "✓"
-        tag = "Backup: " if m is rec and m not in opts[:2] else ""
-        lines.append(f"{tag}{T(m['leave'])} → {T(m['arr'])} · {rides} {flag}")
-        chips = "".join(f'<span class="chip {r["kind"]}">{escape(r["name"])}</span>' for r in m["rides"])
-        detail = " · ".join(f"{escape(r['name'])} {T(r['dep'])}" + (f" pl. {escape(r['track'])}" if r["track"] else "")
-                            + (f' <em class="occ o{r["occ"]}">{OCC[r["occ"]]}</em>' if r.get("occ") in OCC else "") for r in m["rides"])
-        st = f'<span class="st bad">{escape(m["issues"][0][2])}</span>' if m["issues"] else '<span class="st ok">on time</span>'
-        rows.append(f'<div class="trip{" rec" if m is rec else ""}">{f"<small>{tag[:-2]}</small>" if tag else ""}'
-                    f'<div class="tr"><b>{T(m["leave"])} → {T(m["arr"])}</b>{st}</div><div class="tr sub">{chips}<span>{detail}</span></div></div>')
+        tag = "Backup" if m is rec and m not in opts[:2] else ""
+        lines.append(f"{tag + ': ' if tag else ''}{T(m['leave'])} → {T(m['arr'])} · {rides} {flag}")
+        segs, cursor = [], m["leave"]  # the trip as a timeline: walk / wait / ride
+        for l in m["legs"]:
+            if l["ride"]:
+                if l["dep"] > cursor:
+                    segs.append(dict(kind="wait", mins=round((l["dep"] - cursor).total_seconds() / 60)))
+                segs.append(dict(kind=l["kind"], name=l["name"], mins=max(1, round((l["arr"] - l["dep"]).total_seconds() / 60))))
+                cursor = max(cursor, l["arr"])
+            else:
+                segs.append(dict(kind="walk", mins=l["mins"]))
+                cursor += timedelta(minutes=l["mins"])
+        trips_.append(dict(tag=tag, rec=m is rec, leave=m["leave"].isoformat(), arr=m["arr"].isoformat(), segs=segs,
+                           minutes=round((m["arr"] - m["leave"]).total_seconds() / 60), issue=m["issues"][0][2] if m["issues"] else None,
+                           rides=[dict(name=r["name"], kind=r["kind"], dep=T(r["dep"]), track=r["track"], occ=r.get("occ", 0),
+                                       delay=r["delay"]) for r in m["rides"]]))
     head = f"Leave {T(rec['leave'])} → arrive {T(rec['arr'])}" if rec else f"⚠️ no clean trip from {LEAVE}"
-    s = Sec("🚆", f"If you leave at {LEAVE}", lines, head, "ok" if rec is opts[0] else "warn" if rec else "bad", "".join(rows))
-    s.data = dict(rec=rec)
-    return s
+    return Sec("🚆", f"If you leave at {LEAVE}", lines, head, "ok" if rec is opts[0] else "warn" if rec else "bad", "train",
+               dict(trips=trips_, rec=rec and dict(leave=rec["leave"].replace(tzinfo=TZ).isoformat(), arr=rec["arr"].isoformat()),
+                    today=d == now().date(), occ=OCC))
 
 
 def disruptions(d, evening):
-    # RMV alerts on your morning lines during commute hours, plus any strike in the RMV area that day
+    # RMV alerts on your morning lines during commute hours, plus any strike that touches your lines or Frankfurt
     opts, _ = morning_trips(d)
     lines = {r["line_id"]: r["line"] for m in opts for r in m["rides"] if r.get("line_id")}
     windows = [(hm(d, LEAVE), hm(d, "09:00")), (hm(d, PM[0]), hm(d, PM[1]))]
@@ -329,7 +352,7 @@ def disruptions(d, evening):
         mine = any(p.get("lineId") in lines for p in m.get("affectedProduct", [])) or "frankfurt" in text
         if m["id"] not in seen and "streik" in text and mine and active(m, [(hm(d, "05:00"), hm(d, "23:00"))]):
             seen.add(m["id"]); out.append("Strike: " + m["head"].strip())
-    return Sec("⚠️", "Disruptions", out, "⚠️ disruption", "bad") if out else None
+    return Sec("⚠️", "Disruptions", out, "⚠️ disruption", "bad", "alert") if out else None
 
 
 def active(m, windows):
@@ -342,6 +365,12 @@ def active(m, windows):
             start = hm(windows[0][0].date() + timedelta(days=k), m["dailyStartingAt"][:5])
             spans.append((start, start + dur))
     return any(max(a, s, x) < min(b, e, y) for a, b in windows for x, y in spans)
+
+
+def radar(d, evening):
+    # the map itself is built in the browser from RainViewer's live frames, so it is fresh whenever you open the page
+    la, lo = home_coords()
+    return Sec("📡", "Rain radar", ["Live radar on the brief page"], kind="radar", data=dict(lat=la, lon=lo), ping=[])
 
 
 def bike(d, evening):
@@ -370,18 +399,44 @@ def air_quality(d, evening):
     return Sec("🌿", "Air, pollen & sun", out, tone="warn" if bad else "info") if out else None
 
 
+def school(d, evening):
+    # Hessian school holidays and public holidays coming up, bridge days
+    lines = []
+    for h in fetch(f"https://openholidaysapi.org/SchoolHolidays?countryIsoCode=DE&subdivisionCode=DE-HE&validFrom={d - timedelta(30)}"
+                   f"&validTo={d + timedelta(30)}&languageIsoCode=EN"):
+        s, e, name = date.fromisoformat(h["startDate"]), date.fromisoformat(h["endDate"]), h["name"][0]["text"]
+        between = [d - timedelta(k) for k in range(1, (d - e).days)]
+        if s <= d <= e:
+            lines.append(f"{name} until {e:%a %d %b} — schools are out, trains tend to be quieter")
+        elif e < d and (d - e).days <= 4 and all(x.weekday() > 4 or holiday(x) for x in between):
+            lines.append(f"School's back after the {name} — expect busier trains")
+        elif 0 < (s - d).days <= 7:
+            lines.append(f"{name} start {s:%a %d %b} (in {(s - d).days} days)")
+    for k in range(0, 8):
+        x = d + timedelta(k)
+        if holiday(x) and x.weekday() < 5 and k > 0:
+            lines.append(f"Public holiday: {holiday(x)} on {x:%a %d %b} (in {k} day{'s' * (k != 1)})")
+        elif x.weekday() == 4 and holiday(x - timedelta(1)) or x.weekday() == 0 and holiday(x + timedelta(1)):
+            lines.append(f"{x:%a %d %b} is a bridge day — many take it off, quieter trains" if k else "Today is a bridge day — quieter trains")
+    return Sec("🎒", "School & holidays", lines[:3], tone="info") if lines else None
+
+
 def calendar(d, evening):
     evs = ics("GCAL_ICS", d)
     if evs is None:
         return None
     timed = [e for e in evs if not e[3]]
-    lines = [f"All day: {e[2]}" for e in evs if e[3]] + [f"{T(s)}–{T(e)} {t}" for s, e, t, _ in timed[:4]]
+    allday = [e[2] for e in evs if e[3]]
+    lines = [f"All day: {x}" for x in allday] + [f"{T(s)}–{T(e)} {t}" for s, e, t, _ in timed[:5]]
     if not lines:
         return Sec("📅", "Calendar", ["Nothing in your calendar"], tone="ok")
     _, rec = morning_trips(d)
+    warn = None
     if timed and rec and timed[0][0] < rec["arr"] + timedelta(minutes=10):
-        lines.insert(0, f"⚠ First meeting {T(timed[0][0])} — leaving at {LEAVE} you'd arrive {T(rec['arr'])}")
-    return Sec("📅", "Calendar", lines, f"📅 {T(timed[0][0])}" if timed else None, "warn" if lines[0].startswith("⚠") else "info")
+        warn = f"First meeting {T(timed[0][0])} — leaving at {LEAVE} you'd arrive {T(rec['arr'])}"
+        lines.insert(0, f"⚠ {warn}")
+    return Sec("📅", "Calendar", lines, f"📅 {T(timed[0][0])}" if timed else None, "warn" if warn else "info", "calendar",
+               dict(allday=allday, events=[(T(s), T(e), t) for s, e, t, _ in timed[:6]], warn=warn))
 
 
 def bins(d, evening):
@@ -389,15 +444,10 @@ def bins(d, evening):
     evs = ics("FES_ICS", d)
     if not evs:
         return None
-    names = []
-    for _, _, t, _ in evs:
-        label, color = next((v for k, v in BINS.items() if k in t.lower()), (t, "#777"))
-        names.append((label, color))
+    names = [next((v for k, v in BINS.items() if k in t.lower()), (t, "#777")) for _, _, t, _ in evs]
     text = ", ".join(n for n, _ in names)
-    s = Sec("🗑", "Bins", [f"Put out tonight: {text}" if evening else f"Collected today: {text}"], f"🗑 {text}", "warn" if evening else "info")
-    s.html = "<p>" + ("Put out tonight" if evening else "Collected today") + ": " + " ".join(
-        f'<span class="bin" style="--c:{c}">{escape(n)}</span>' for n, c in names) + "</p>"
-    return s
+    return Sec("🗑", "Bins", [f"Put out tonight: {text}" if evening else f"Collected today: {text}"], f"🗑 {text}",
+               "warn" if evening else "info", "bins", dict(names=names, evening=evening))
 
 
 def notes(d, evening):
@@ -406,37 +456,109 @@ def notes(d, evening):
         r = [x for x in r if x[2] != "countdown"]
     # only one-offs, bills and birthdays make the evening heads-up worth sending; weekly routines just ride along
     tone = "warn" if evening and any(k != "weekly" for _, _, k in r) else "info"
-    return Sec("📌", "Today" if not evening else "Tomorrow", [f"{i} {t}" for i, t, _ in r], tone=tone) if r else None
+    return Sec("📌", "Tomorrow" if evening else "Today", [f"{i} {t}" for i, t, _ in r], tone=tone, kind="notes",
+               data=dict(items=[(i, t) for i, t, _ in r])) if r else None
 
 
-def sun(d, evening):
-    rise, set_ = (datetime.fromisoformat(daily(d, k)) for k in ("sunrise", "sunset"))
-    day_len = set_ - rise
-    lines = [f"Sunrise {T(rise)} · sunset {T(set_)} · {day_len.seconds // 3600}h {day_len.seconds % 3600 // 60:02d}m of daylight"]
-    for k in range(1, 5):  # clocks change at 2–3am on a Sunday; warn from the Thursday before
-        a, b = datetime.combine(d + timedelta(k - 1), datetime.min.time(), TZ), datetime.combine(d + timedelta(k), datetime.min.time(), TZ)
-        if a.utcoffset() != b.utcoffset():
-            back = b.utcoffset() < a.utcoffset()
-            lines.append(f"⏰ Clocks go {'back' if back else 'forward'} 1 hour early on {(d + timedelta(k - 1)):%a %d %b} — "
-                         + ("an extra hour of sleep" if back else "one hour less sleep"))
-    return Sec("🌅", "Daylight", lines)
-
-
-def fx(d, evening):
-    sym = E("FX", "INR")
-    if not sym or evening:
+def news(d, evening):
+    if evening:
         return None
-    r = fetch(f"https://api.frankfurter.dev/v1/{(d - timedelta(10)).isoformat()}..?base=EUR&symbols={quote(sym)}")["rates"]
-    days = sorted(r)
-    now_, prev = r[days[-1]], r[days[-2]] if len(days) > 1 else r[days[-1]]
-    lines = []
-    for s in sym.split(","):
-        ch = (now_[s] - prev[s]) / prev[s] * 100
-        lines.append(f"€1 = {now_[s]:.2f} {s} ({'▲' if ch > 0 else '▼' if ch < 0 else '='}{abs(ch):.2f}% vs previous day)")
-    return Sec("💶", "Exchange rate", lines)
+
+    def items(url, tag, n):
+        out = []
+        for x in fetch(url).get("news", []):
+            if x.get("type") == "story" and x.get("title") and x.get("shareURL"):
+                when = dt(x["date"]) if x.get("date") else None
+                if when and now() - when > timedelta(hours=30):
+                    continue
+                out.append(dict(title=clean(x["title"]), url=x["shareURL"], tag=tag, topline=clean(x.get("topline")),
+                                time=when.isoformat() if when else None))
+            if len(out) == n:
+                break
+        return out
+    national = items("https://www.tagesschau.de/api2u/homepage", "Germany", 4)
+    hessen = items("https://www.tagesschau.de/api2u/news/?regions=7", "Hessen", 3)
+    if not (national or hessen):
+        return None
+    return Sec("📰", "News", [x["title"] for x in national + hessen], kind="news", data=dict(national=national, hessen=hessen),
+               ping=[x["title"] for x in national[:2]])
 
 
-SECTIONS = [weather, dwd_warnings, frost, train, disruptions, way_home, bike, air_quality, calendar, bins, notes, sun, fx]
+def history(d, evening):
+    ev = wiki_feed(now().date()).get("onthisday") or []
+    if evening or not ev:
+        return None
+    e = ev[d.toordinal() % len(ev)]
+    page_ = next((p["content_urls"]["desktop"]["page"] for p in e.get("pages", []) if p.get("content_urls")), None)
+    return Sec("📜", "On this day", [f"{e['year']}: {clean(e['text'])}"], kind="history",
+               data=dict(year=e["year"], text=clean(e["text"], 220), url=page_), ping=[])
+
+
+def article(d, evening):
+    t = wiki_feed(now().date()).get("tfa")
+    if evening or not t:
+        return None
+    return Sec("📖", "Read on the train", [clean(t["extract"], 200)], kind="article", ping=[],
+               data=dict(title=clean(t["titles"]["normalized"]), extract=clean(t["extract"], 260), url=t["content_urls"]["desktop"]["page"],
+                         thumb=(t.get("thumbnail") or {}).get("source")))
+
+
+def word(d, evening):
+    if evening:
+        return None
+    art, w, pos, meaning, ex, ex_en = WORDS[d.toordinal() % len(WORDS)]
+    return Sec("🇩🇪", "German word of the day", [f"{(art + ' ') if art else ''}{w} — {meaning}"], kind="word", ping=[f"{(art + ' ') if art else ''}{w} — {meaning}"],
+               data=dict(art=art, word=w, pos=pos, meaning=meaning, example=ex, example_en=ex_en))
+
+
+def river(d, evening):
+    # the Main at Frankfurt Osthafen; Marke I (300 cm) is where shipping starts to be restricted
+    if evening:
+        return None
+    base = "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/FRANKFURT%20OSTHAFEN"
+    w = fetch(base + "/W/measurements.json?start=P1D")
+    temp = fetch(base + "/WT/currentmeasurement.json")["value"]
+    level, change = w[-1]["value"], w[-1]["value"] - w[0]["value"]
+    high = level >= 300 or change >= 60
+    line = f"Main {round(level)} cm ({change:+.0f} in 24 h), water {temp:.1f}°C"
+    return Sec("🌊", "River Main", [line + (" — high water, expect disruption to river paths" if high else "")], "🌊 high water" if high else None,
+               "warn" if high else "info", "river", dict(level=level, change=change, temp=temp, high=high, mark=300, lo=100, hi=400), ping=[line] if high else [])
+
+
+def markets(d, evening):
+    if evening:
+        return None
+    rows, ping = [], []
+    sym = E("FX", "INR")
+    if sym:
+        r = fetch(f"https://api.frankfurter.dev/v1/{(d - timedelta(20)).isoformat()}..?base=EUR&symbols={quote(sym)}")["rates"]
+        days = sorted(r)
+        for s in sym.split(","):
+            series = [r[x][s] for x in days if s in r[x]]
+            ch = (series[-1] - series[-2]) / series[-2] * 100 if len(series) > 1 else 0
+            rows.append(dict(label=f"€1 → {s}", value=f"{series[-1]:.2f}", change=ch, spark=series[-14:]))
+            ping.append(f"€1 = {series[-1]:.2f} {s} ({'▲' if ch > 0 else '▼' if ch < 0 else '='}{abs(ch):.2f}% vs previous day)")
+    for item in (E("WATCHLIST") or "").split(","):  # "SYMBOL" or "SYMBOL:Label", from Yahoo Finance's free chart feed
+        symbol, _, label = item.strip().partition(":")
+        if not symbol:
+            continue
+        try:
+            q = fetch(f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(symbol)}?range=1mo&interval=1d", **{"User-Agent": "Mozilla/5.0"})["chart"]["result"][0]
+            closes = [x for x in q["indicators"]["quote"][0]["close"] if x is not None]
+            price = q["meta"]["regularMarketPrice"]
+            # Yahoo's closes are 32-bit floats, so compare loosely; if the last close is today's price, the previous day is the one before
+            prev = closes[-2] if len(closes) > 1 and abs(closes[-1] - price) <= price * 1e-4 else closes[-1]
+            cur = {"EUR": "€", "USD": "$", "GBP": "£"}.get(q["meta"].get("currency", ""), "")
+            rows.append(dict(label=label or symbol, value=f"{cur}{price:,.2f}", change=(price - prev) / prev * 100, spark=closes[-14:]))
+        except Exception as e:  # unofficial feed; quietly skip a symbol rather than break the brief
+            print("watchlist", symbol, "failed:", e)
+    if not rows:
+        return None
+    return Sec("💶", "Markets", [f"{x['label']} {x['value']} ({x['change']:+.2f}%)" for x in rows], kind="ticker", data=dict(rows=rows), ping=ping[:1])
+
+
+SECTIONS = [weather, sky, dwd_warnings, frost, train, disruptions, way_home, radar, bike, air_quality, school, calendar, bins, notes,
+            news, history, article, word, river, markets]
 TONE_ORDER = {"bad": 0, "warn": 1, "info": 2, "ok": 2}
 
 
@@ -455,8 +577,9 @@ def build(d, evening=False):
         try:
             s = f(d, evening)
         except Exception as e:  # one broken source shouldn't sink the whole brief
+            print(f"{f.__name__} failed: {type(e).__name__}: {e}")
             s = Sec("❔", f.__name__.replace("_", " ").title(), [f"unavailable ({type(e).__name__}: {str(e)[:80]})"])
-        if s and (s.lines or s.html):
+        if s and (s.lines or s.data):
             secs.append(s)
     return secs
 
@@ -468,76 +591,15 @@ def message(secs, d, evening):
     if d != now().date() + timedelta(1 if evening else 0):
         body.append(f"(for {d:%a %d %b})")
     for s in sorted(secs, key=lambda s: TONE_ORDER[s.tone]):
+        lines = s.lines if s.ping is None else s.ping
         if s.icon == "🚆":
-            body += [f"🚆 {s.title}:"] + s.lines
+            body += [f"🚆 {s.title}:"] + lines
         else:  # lines that bring their own emoji keep it
-            body += [x if x[:1] in "⚠⏰🎂📌⏳🎉" else f"{s.icon} {x}" for x in s.lines]
+            body += [x if x[:1] in "⚠⏰🎂📌⏳🎉🌕🌑" else f"{s.icon} {x}" for x in lines]
     if not evening:
         q, who = quote_of(d)
         body.append(f"\n“{q}” — {who}")
     return title, "\n".join(body)
-
-
-def page(secs, d, evening):
-    w = next((s for s in secs if s.title == "Weather"), None)
-    tr = next((s for s in secs if s.icon == "🚆"), None)
-    pic, (q, who) = picture(now().date()), quote_of(d)
-    greet = (f"Tomorrow, {d:%A}" if evening else
-             "Good morning" if now().hour < 12 else "Good afternoon" if now().hour < 18 else "Good evening")
-    temp = f'{round(w.data["lo"])}°<span>→</span>{round(w.data["hi"])}°' if w and w.data else ""
-    rec = tr.data["rec"] if tr and tr.data else None
-    leave = (f'<div class="leave"><small>Leave {LEAVE[:5]} →</small><b>{T(rec["arr"])}</b><small>at Haus 21</small></div>' if rec else "")
-    bg = f"background-image:linear-gradient(180deg,rgba(0,0,0,.15),rgba(0,0,0,.65)),url('{escape(pic['url'])}')" if pic else ""
-    hero = (f'<header class="hero" style="{bg}"><div class="hi"><p class="date">{d:%A, %d %B}</p><h1>{greet}</h1>'
-            f'<div class="now"><div class="temp">{w.icon if w else ""} {temp}</div>{leave}</div>'
-            f'<blockquote>“{escape(q)}”<cite>— {escape(who)}</cite></blockquote></div></header>')
-    cards = []
-    for s in sorted(secs, key=lambda s: TONE_ORDER[s.tone]):  # problems first, otherwise section order
-        body = s.html or "".join(f"<p>{escape(x)}</p>" for x in s.lines)
-        cards.append(f'<section class="card {s.tone}"><h2><span>{s.icon}</span>{escape(s.title)}</h2>{body}</section>')
-    credit = (f'<p>Photo: <a href="{escape(pic["page"])}">{escape(pic["about"] or "Wikimedia Commons picture of the day")}</a> · '
-              f'{escape(pic["credit"])} · {escape(pic["license"])}</p>') if pic else ""
-    page_url = E("PAGE_URL") or "../"
-    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>{'Tomorrow' if evening else 'Morning brief'}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-<style>
-:root{{--bg:#f5f2ec;--card:#fff;--ink:#1d1b18;--mute:#76716a;--line:#e7e2d9;--ok:#1f7a4d;--okb:#e4f3ea;--warn:#a35d00;--warnb:#fdf1de;--bad:#b42318;--badb:#fde8e6;
---u:#1b64b0;--s:#2f8f3a;--bus:#8b3a8f;--tram:#c4322a;--rail:#5b5b5b}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#121211;--card:#1d1c1a;--ink:#f1eee7;--mute:#9b968c;--line:#302e2a;--ok:#5fd39a;--okb:#14321f;--warn:#f0b54d;--warnb:#36270f;--bad:#ff8a7e;--badb:#3a1613}}}}
-*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif}}
-.hero{{min-height:440px;background:#2b3a4a linear-gradient(160deg,#36506b,#c98b5e) center/cover;color:#fff;display:flex;align-items:flex-end}}
-.hi{{width:100%;max-width:600px;margin:0 auto;padding:28px 18px 26px}}
-.date{{margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;opacity:.85}}
-h1{{font-family:Fraunces,Georgia,serif;font-weight:700;font-size:44px;line-height:1.05;margin:4px 0 18px;text-shadow:0 2px 18px rgba(0,0,0,.35)}}
-.now{{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}}
-.temp,.leave{{background:rgba(255,255,255,.16);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.25);border-radius:16px;padding:10px 16px}}
-.temp{{font:600 30px/1.2 Fraunces,Georgia,serif}}.temp span{{opacity:.6;margin:0 4px;font-size:22px}}
-.leave{{display:flex;flex-direction:column;justify-content:center}}.leave b{{font:700 26px/1.1 Fraunces,Georgia,serif}}.leave small{{font-size:12px;opacity:.85}}
-blockquote{{margin:0;font:500 19px/1.4 Fraunces,Georgia,serif;text-shadow:0 1px 12px rgba(0,0,0,.4);max-width:520px}}
-cite{{display:block;font:400 13px Inter,sans-serif;opacity:.85;margin-top:6px;font-style:normal}}
-main{{max-width:600px;margin:-14px auto 0;padding:0 14px 30px;position:relative}}
-.card{{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin:0 0 12px;box-shadow:0 1px 2px rgba(0,0,0,.04)}}
-.card.warn{{border-left:5px solid var(--warn)}}.card.bad{{border-left:5px solid var(--bad);background:linear-gradient(90deg,var(--badb),var(--card) 40%)}}
-.card h2{{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--mute);margin:0 0 8px;display:flex;gap:8px;align-items:center}}
-.card h2 span{{font-size:17px;letter-spacing:0}}.card p{{margin:4px 0}}.big{{font-size:16px;font-weight:600}}
-.strip{{display:flex;gap:4px;overflow-x:auto;margin-top:10px;padding-bottom:2px}}
-.hr{{flex:1;min-width:36px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;color:var(--mute)}}
-.hr b{{font-size:18px}}.hr .tp{{color:var(--ink);font-weight:600;font-size:14px}}
-.hr i{{display:block;width:8px;height:34px;border-radius:4px;background:linear-gradient(to top,#378add var(--p),var(--line) var(--p))}}.hr .rp{{font-size:11px}}
-.trip{{border-top:1px solid var(--line);padding:9px 0}}.trip:first-of-type{{border-top:0;padding-top:2px}}.trip.rec b{{color:var(--ok)}}
-.trip small{{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--warn);font-weight:600}}
-.tr{{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}}.tr b{{font-size:20px;font-variant-numeric:tabular-nums}}
-.tr.sub{{justify-content:flex-start;color:var(--mute);font-size:13px;margin-top:4px}}
-.chip{{display:inline-block;color:#fff;font-weight:700;font-size:12px;padding:2px 7px;border-radius:5px;background:var(--rail)}}
-.chip.u{{background:var(--u)}}.chip.s{{background:var(--s);border-radius:10px}}.chip.bus{{background:var(--bus)}}.chip.tram{{background:var(--tram)}}
-.st{{font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px}}.st.ok{{color:var(--ok);background:var(--okb)}}.st.bad{{color:var(--bad);background:var(--badb)}}
-.occ{{font-style:normal;font-size:11px;padding:1px 6px;border-radius:5px;background:var(--bg)}}.occ.o13,.occ.o14{{color:var(--warn);background:var(--warnb)}}
-.bin{{display:inline-block;padding:2px 10px;border-radius:99px;color:#fff;background:var(--c);font-weight:600;font-size:13px;margin:2px 2px 0 0}}
-footer{{color:var(--mute);font-size:12px;text-align:center;padding:4px 10px 0}}footer a{{color:inherit}}
-</style></head><body>{hero}<main>{"".join(cards)}
-<footer><p><a href="{escape(page_url)}">Live commute page →</a></p>{credit}<p>Made {T(now())} · RMV, Open-Meteo, DWD via Bright Sky, ECB</p></footer>
-</main></body></html>"""
 
 
 def send(title, body, tag="sunrise", pic=None, priority=3):
@@ -585,9 +647,11 @@ def run(d, evening, wait_until=None):
     secs = build(d, evening)
     title, body = message(secs, d, evening)
     try:
-        c.publish(page(secs, d, evening), "brief/index.html")
+        ctx = dict(pic=picture(now().date()), quote=quote_of(d), leave=LEAVE, page_url=E("PAGE_URL") or "../", made=T(now()),
+                   name=E("NAME", "Smarth"), today=now().date(), now=now())
+        c.publish(page(secs, d, evening, ctx), "brief/index.html")
     except Exception as e:  # the ping matters more than the page
-        print("page publish failed:", e)
+        print("page publish failed:", type(e).__name__, e)
     if wait_until:
         time.sleep(max(0, (wait_until - now()).total_seconds()))
     return secs, title, body
