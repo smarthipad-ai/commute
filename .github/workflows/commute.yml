@@ -1,8 +1,11 @@
 name: commute
 on:
   schedule:
+    # 06:40 and 14:40 Berlin time; each pair covers summer and winter time (UTC+2 / UTC+1)
     - cron: "40 4 * * 1-5"
     - cron: "40 5 * * 1-5"
+    - cron: "40 12 * * 1-5"
+    - cron: "40 13 * * 1-5"
   workflow_dispatch:
 permissions:
   contents: write
@@ -10,7 +13,7 @@ concurrency: commute
 jobs:
   watch:
     runs-on: ubuntu-latest
-    timeout-minutes: 100
+    timeout-minutes: 210
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,3 +31,4 @@ jobs:
           PAGE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
           GH_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
           FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+          SCHEDULE: ${{ github.event.schedule }}

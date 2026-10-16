@@ -1,5 +1,6 @@
 import json, os, re, subprocess, sys, tempfile, time
 from datetime import datetime, timedelta
+from functools import cache
 from html import escape
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -9,11 +10,16 @@ API = "https://www.rmv.de/hapi"
 TZ = ZoneInfo("Europe/Berlin")
 E = os.environ.get
 LEAVE_FROM, LEAVE_TO, ARRIVE_BY = E("LEAVE_FROM", "07:30"), E("LEAVE_TO", "08:00"), E("ARRIVE_BY", "08:30")
-LATE, EVERY = 5, 420
+AM, PM = (E("AM_FROM", "07:00"), E("AM_TO", "09:00")), (E("PM_FROM", "15:00"), E("PM_TO", "17:30"))
+LATE, STEP, AHEAD = 5, 5, 60
 
 
 def now():
     return datetime.now(TZ).replace(tzinfo=None)
+
+
+def hm(d, x):
+    return datetime.combine(d, datetime.strptime(x, "%H:%M").time())
 
 
 def get(url, **kw):
@@ -32,6 +38,7 @@ def lookup(q, n=1):
     return out
 
 
+@cache
 def place(v):
     m = re.fullmatch(r"\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*", v)
     if m:
@@ -106,10 +113,10 @@ def day():
     return d
 
 
-def trips(o, d, dt):
-    lf, lt = (datetime.combine(dt, datetime.strptime(x, "%H:%M").time()) for x in (LEAVE_FROM, LEAVE_TO))
+def trips(o, d, lf, lt, by=None):
+    q = lf - timedelta(minutes=20)
     p = {**{"origin" + k: v for k, v in o.items()}, **{"dest" + k: v for k, v in d.items()},
-         "date": f"{dt:%Y-%m-%d}", "time": (lf - timedelta(minutes=20)).strftime("%H:%M"), "numF": 6}
+         "date": f"{q:%Y-%m-%d}", "time": f"{q:%H:%M}", "numF": 6}
     out, seen, ctx = [], set(), None
     for _ in range(5):
         r = hapi("trip", **p, **({"context": ctx} if ctx else {}))
@@ -121,26 +128,33 @@ def trips(o, d, dt):
         ctx = r.get("scrF")
         if not ms or not ctx or max(m["leave"] for m in ms) > lt:
             break
-    by = datetime.combine(dt, datetime.strptime(ARRIVE_BY, "%H:%M").time())
     for m in out:
-        m["late"] = m["arr"] > by
-        m["spare"] = round((by - m["arr"]).total_seconds() / 60)
+        m["late"] = bool(by) and m["arr"] > by
+        m["spare"] = round((by - m["arr"]).total_seconds() / 60) if by else None
         m["gone"] = m["leave"] < now()
         m["ok"] = not m["issues"] and not m["late"]
     out.sort(key=lambda m: (m["leave"], m["arr"]))
     live = [m for m in out if not m["gone"]]
     good = [m for m in live if m["ok"]]
-    rec = good[-1] if good else None
+    # with a deadline: the latest clean trip that makes it; live: the next clean trip
+    rec = (good[-1] if by else good[0]) if good else None
     for m in out:
         m["rec"] = m is rec
     return out, rec
 
 
-def snapshot():
-    (o, on), (d, dn) = place(E("HOME_ADDR")), place(E("WORK_ADDR"))
-    dt = day()
-    opts, rec = trips(o, d, dt)
-    return dict(date=dt, opts=opts, rec=rec, at=now(), home=on, work=dn)
+def snapshot(back=False, live=False):
+    a, b = ("WORK_ADDR", "HOME_ADDR") if back else ("HOME_ADDR", "WORK_ADDR")
+    (o, _), (d, _) = place(E(a)), place(E(b))
+    if live:
+        n = now()
+        dt, lf, lt, by = n.date(), n, n + timedelta(minutes=AHEAD), None
+    else:
+        dt = day()
+        lf, lt, by = (hm(dt, x) for x in (LEAVE_FROM, LEAVE_TO, ARRIVE_BY))
+    opts, rec = trips(o, d, lf, lt, by)
+    return dict(date=dt, opts=opts, rec=rec, at=now(), lf=lf, lt=lt, by=by,
+                route="Haus 21 → Home" if back else "Home → Haus 21")
 
 
 T = lambda x: x.strftime("%H:%M")
@@ -186,7 +200,7 @@ def status(m):
         return f'<span class="st bad">{escape(m["issues"][0][2])}</span>'
     if m["late"]:
         return f'<span class="st warn">{-m["spare"]} min late</span>'
-    return f'<span class="st ok">{m["spare"]} min spare</span>'
+    return f'<span class="st ok">{"On time" if m["spare"] is None else str(m["spare"]) + " min spare"}</span>'
 
 
 def card(m):
@@ -200,12 +214,15 @@ def card(m):
 
 
 def render(s):
-    rec, by = s["rec"], ARRIVE_BY
+    rec, by, win = s["rec"], s["by"], f'{T(s["lf"])}–{T(s["lt"])}'
     if rec:
-        hero = (f'<p class="eyebrow">Leave home by</p><h1>{T(rec["leave"])}</h1>'
-                f'<p class="lead">Arrive {T(rec["arr"])} · {rec["spare"]} min before {by}</p>')
+        dur = round((rec["arr"] - rec["leave"]).total_seconds() / 60)
+        sub = f"{rec['spare']} min before {T(by)}" if by else f"{dur} min door to door"
+        hero = (f'<p class="eyebrow">{"Leave by" if by else "Next clean trip · leave"}</p><h1>{T(rec["leave"])}</h1>'
+                f'<p class="lead">Arrive {T(rec["arr"])} · {sub}</p>')
     else:
-        hero = f'<p class="eyebrow">Heads up</p><h1 class="bad">No clean option</h1><p class="lead">Nothing between {LEAVE_FROM} and {LEAVE_TO} gets you there by {by} without a problem. Check the list.</p>'
+        hero = (f'<p class="eyebrow">Heads up</p><h1 class="bad">No clean option</h1><p class="lead">Nothing leaving {win} '
+                f'gets you there{f" by {T(by)}" if by else ""} without a problem. Check the list.</p>')
     cards = "".join(map(card, s["opts"])) or '<p class="empty">RMV returned no connections.</p>'
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="120">
@@ -243,8 +260,8 @@ summary{{list-style:none;cursor:pointer;padding:14px 16px}}summary::-webkit-deta
 .tag.warn{{background:var(--warnb);color:var(--warn)}}.tag.bad{{background:var(--badb);color:var(--bad)}}b.bad,.bad{{color:var(--bad)}}
 .note{{margin:6px 0 0;font-size:13px;color:var(--warn)}}.empty,footer{{color:var(--mute);font-size:13px}}footer{{margin-top:22px}}
 </style></head><body><main>
-{hero}<p class="meta">{s["date"]:%a %d %b} · Home → Haus 21 · live RMV data as of {T(s["at"])}</p>
-<h2>Leaving {LEAVE_FROM}–{LEAVE_TO}</h2>{cards}
+{hero}<p class="meta">{s["date"]:%a %d %b} · {s["route"]} · live RMV data as of {T(s["at"])}</p>
+<h2>Leaving {win}</h2>{cards}
 <footer>Tap a trip for every train, platform and walk. Times include walking from your door. Refreshes every 2 min.</footer>
 </main></body></html>"""
 
@@ -259,9 +276,14 @@ def publish(html):
         git("init", "-q", "-b", "gh-pages"); git("add", "."); git("commit", "-qm", "update"); git("push", "-qf", remote, "gh-pages")
 
 
-def notify(s, loud):
-    rec = s["rec"]
-    title = f"Leave {T(rec['leave'])} → arrive {T(rec['arr'])}" if rec else f"No clean option for {ARRIVE_BY}"
+def notify(s, new=()):
+    rec, loud = s["rec"], bool(new)
+    if new:
+        title = "⚠ " + ", ".join(f"{n} {T(t)} {w}" for n, t, w in sorted(new, key=lambda i: i[1]))
+    elif s["by"]:
+        title = f"Leave {T(rec['leave'])} → arrive {T(rec['arr'])}" if rec else f"No clean option for {T(s['by'])}"
+    else:
+        title = f"{s['route']}: leave {T(rec['leave'])} → arrive {T(rec['arr'])}" if rec else f"{s['route']}: no clean trip in the next hour"
     lines = []
     for m in [m for m in s["opts"] if not m["gone"]][:4]:
         flag = "✓" if m["ok"] else "⚠ " + (m["issues"][0][0] + " " + m["issues"][0][2] if m["issues"] else "late")
@@ -276,28 +298,45 @@ def notify(s, loud):
 
 
 def sig(s):
-    return (s["rec"] and s["rec"]["leave"], frozenset(i[:2] + (i[2].startswith("+"),) for m in s["opts"] if not m["gone"] for i in m["issues"]))
+    # problems on trips still ahead; a delay counts once, not per extra minute
+    return frozenset(i[:2] + ("delayed" if i[2].startswith("+") else i[2],) for m in s["opts"] if not m["gone"] for i in m["issues"])
+
+
+def session():
+    # (back, from, to) for the session this run belongs to, or None
+    n, sched = now(), E("SCHEDULE")
+    if sched:  # cron is in UTC; both DST variants fire, only the one landing just before a session counts
+        mi, h = map(int, sched.split()[:2])
+        n = datetime.now(ZoneInfo("UTC")).replace(hour=h, minute=mi, second=0, microsecond=0).astimezone(TZ).replace(tzinfo=None)
+    for back, (f, t) in ((False, AM), (True, PM)):
+        if hm(n.date(), f) - timedelta(minutes=30) <= n <= (hm(n.date(), f) if sched else hm(n.date(), t)):
+            return back, f, t
 
 
 def watch():
-    force = E("FORCE") == "true"
-    t = now().strftime("%H:%M")
-    if not force and not ("06:30" <= t <= "07:35"):
-        print("outside start window", t); return
-    end = datetime.combine(now().date(), datetime.strptime(LEAVE_TO, "%H:%M").time())
-    last_sig, last_html = None, None
-    while True:
-        s = snapshot()
-        html = render(s)
-        if html.split("live RMV data")[0] != (last_html or "").split("live RMV data")[0]:
-            publish(html); last_html = html
+    if E("FORCE") == "true":
+        s = snapshot(now().hour >= 12, live=True)
+        publish(render(s)); notify(s); return
+    w = session()
+    if not w:
+        print("not a session start", now()); return
+    back, f, t = w
+    slot, end = max(hm(now().date(), f), now()), hm(now().date(), t)
+    hour, seen, last_html, pub = None, None, None, datetime.min
+    while slot <= end:
+        time.sleep(max(0, (slot - now()).total_seconds()))
+        s = snapshot(back, live=True)
         k = sig(s)
-        if k != last_sig:
-            notify(s, loud=last_sig is not None and (not s["rec"] or k[1] - (last_sig[1] if last_sig else frozenset())))
-            last_sig = k
-        if force or now() + timedelta(seconds=EVERY) > end:
-            break
-        time.sleep(EVERY)
+        new = k - seen if seen is not None else frozenset()
+        if new or slot.hour != hour:  # hourly status, or straight away when a new problem shows up
+            notify(s, new); hour = slot.hour
+        seen = k
+        html = render(s)
+        # Pages allows ~10 builds an hour, so only republish every 10 min unless a problem appeared
+        if re.sub(r"as of \d\d:\d\d", "", html) != re.sub(r"as of \d\d:\d\d", "", last_html or "") and (new or now() - pub >= timedelta(minutes=10)):
+            publish(html); last_html, pub = html, now()
+        n = (now() + timedelta(minutes=STEP)).replace(second=0, microsecond=0)
+        slot = n - timedelta(minutes=n.minute % STEP)
 
 
 if __name__ == "__main__":
@@ -307,10 +346,10 @@ if __name__ == "__main__":
             print(k, "=", E(k))
             print("   ", place(E(k))[1]) if "," in E(k) and re.search(r"\d\.\d", E(k).split(",")[0]) else [print("   ", p["name"]) for p in lookup(E(k), 3)]
         s = snapshot()
-        publish(render(s)); notify(s, False) if "--send" in a else None
+        publish(render(s)); notify(s) if "--send" in a else None
     elif "--watch" in a:
         watch()
     else:
-        s = snapshot(); publish(render(s))
+        s = snapshot("--back" in a, "--live" in a); publish(render(s))
         for m in s["opts"]:
             print(T(m["leave"]), "→", T(m["arr"]), " ".join(r["name"] for r in m["rides"]), m["issues"] or "")
