@@ -590,7 +590,10 @@ def follow_up(d, secs):
 def run(d, evening, wait_until=None):
     secs = build(d, evening)
     title, body = message(secs, d, evening)
-    c.publish(page(secs, d, evening), "brief/index.html")
+    try:
+        c.publish(page(secs, d, evening), "brief/index.html")
+    except Exception as e:  # the ping matters more than the page
+        print("page publish failed:", e)
     if wait_until:
         time.sleep(max(0, (wait_until - now()).total_seconds()))
     return secs, title, body

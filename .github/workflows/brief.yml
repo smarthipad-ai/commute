@@ -25,6 +25,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: |
+          git config --global user.name commute-bot
+          git config --global user.email commute-bot@users.noreply.github.com
           pip install -q icalendar==6.3.2 recurring-ical-events==3.8.0
           python brief.py ${{ inputs.evening && '--evening' || '' }}
         env:
