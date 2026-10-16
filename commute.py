@@ -73,8 +73,10 @@ def model(t):
         o, d = l["Origin"], l["Destination"]
         if l.get("type") == "JNY":
             name = " ".join((l.get("name") or "").split())
+            pr = l.get("Product") or {}
+            pr = (pr[0] if pr else {}) if isinstance(pr, list) else pr
             msgs = [m.get("head", "").strip() for m in (l.get("Messages") or {}).get("Message", [])]
-            legs.append(dict(ride=True, name=name, kind=kind(name), dir=l.get("direction", ""),
+            legs.append(dict(ride=True, name=name, kind=kind(name), dir=l.get("direction", ""), line=pr.get("line") or name, line_id=pr.get("lineId"),
                              frm=o["name"], to=d["name"], dep=at(o), pdep=at(o, False), arr=at(d), parr=at(d, False),
                              track=o.get("rtTrack") or o.get("track"), moved=bool(o.get("rtTrack") and o.get("track") and o["rtTrack"] != o["track"]),
                              cancelled=bool(l.get("cancelled") or o.get("cancelled") or d.get("cancelled")),

@@ -1,0 +1,28 @@
+name: brief
+on:
+  schedule:
+    # 06:15 Berlin time in summer and winter (UTC+2 / UTC+1); brief.py waits and sends at 06:45
+    - cron: "15 4 * * 1-5"
+    - cron: "15 5 * * 1-5"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency: brief
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python brief.py
+        env:
+          RMV_KEY: ${{ secrets.RMV_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          HOME_ADDR: ${{ secrets.HOME_ADDR }}
+          WORK_ADDR: ${{ secrets.WORK_ADDR }}
+          PAGE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+          SCHEDULE: ${{ github.event.schedule }}
