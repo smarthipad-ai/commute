@@ -76,7 +76,8 @@ def model(t):
             pr = l.get("Product") or {}
             pr = (pr[0] if pr else {}) if isinstance(pr, list) else pr
             msgs = [m.get("head", "").strip() for m in (l.get("Messages") or {}).get("Message", [])]
-            legs.append(dict(ride=True, name=name, kind=kind(name), dir=l.get("direction", ""), line=pr.get("line") or name, line_id=pr.get("lineId"),
+            occ = max((o.get("raw", 0) for o in l.get("Occupancy") or []), default=0)
+            legs.append(dict(ride=True, name=name, kind=kind(name), dir=l.get("direction", ""), line=pr.get("line") or name, line_id=pr.get("lineId"), occ=occ,
                              frm=o["name"], to=d["name"], dep=at(o), pdep=at(o, False), arr=at(d), parr=at(d, False),
                              track=o.get("rtTrack") or o.get("track"), moved=bool(o.get("rtTrack") and o.get("track") and o["rtTrack"] != o["track"]),
                              cancelled=bool(l.get("cancelled") or o.get("cancelled") or d.get("cancelled")),
@@ -268,14 +269,28 @@ summary{{list-style:none;cursor:pointer;padding:14px 16px}}summary::-webkit-deta
 </main></body></html>"""
 
 
-def publish(html):
+def publish(html, path="index.html"):
+    # gh-pages holds the live page and the morning brief, so update one file and keep the rest
     remote = E("GH_REMOTE")
     if not remote:
-        open("commute.html", "w").write(html); print("wrote commute.html"); return
-    with tempfile.TemporaryDirectory() as d:
-        open(f"{d}/index.html", "w").write(html); open(f"{d}/.nojekyll", "w").close()
-        git = lambda *a: subprocess.run(["git", *a], cwd=d, check=True, capture_output=True)
-        git("init", "-q", "-b", "gh-pages"); git("add", "."); git("commit", "-qm", "update"); git("push", "-qf", remote, "gh-pages")
+        out = "commute.html" if path == "index.html" else path.replace("/", "_")
+        open(out, "w").write(html); print("wrote", out); return
+    for attempt in range(3):
+        with tempfile.TemporaryDirectory() as d:
+            git = lambda *a: subprocess.run(["git", *a], cwd=d, check=True, capture_output=True)
+            if subprocess.run(["git", "clone", "-q", "--depth", "1", "-b", "gh-pages", remote, d], capture_output=True).returncode:
+                git("init", "-q", "-b", "gh-pages")
+            os.makedirs(os.path.dirname(f"{d}/{path}"), exist_ok=True)
+            open(f"{d}/{path}", "w").write(html); open(f"{d}/.nojekyll", "w").close()
+            git("add", ".")
+            if not subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=d).returncode:
+                return
+            git("commit", "-qm", f"update {path}")
+            try:
+                git("push", "-q", remote, "gh-pages"); return
+            except subprocess.CalledProcessError:  # the other workflow pushed first; start over from its version
+                if attempt == 2:
+                    raise
 
 
 def notify(s, new=()):
