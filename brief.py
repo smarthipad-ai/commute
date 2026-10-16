@@ -191,6 +191,8 @@ def reminders(d, evening=False):
     """
     out = []
     for raw in (E("REMINDERS") or "").splitlines():
+        if raw.lstrip().startswith("#"):
+            continue
         key, _, text = raw.partition(":")
         key, text = key.strip().lower(), text.strip()
         if not text:
