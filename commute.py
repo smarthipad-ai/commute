@@ -1,5 +1,5 @@
 import json, os, re, subprocess, sys, tempfile, time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from functools import cache
 from html import escape
 from urllib.parse import urlencode
@@ -20,6 +20,28 @@ def now():
 
 def hm(d, x):
     return datetime.combine(d, datetime.strptime(x, "%H:%M").time())
+
+
+def easter(y):
+    a, b, c = y % 19, y // 100, y % 100
+    d, e = b // 4, b % 4
+    g = (8 * b + 13) // 25
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 19 * l) // 433
+    n = (h + l - 7 * m + 90) // 25
+    return date(y, n, (h + l - 7 * m + 33 * n + 19) % 32)
+
+
+def holiday(d):
+    # public holidays in Hesse
+    e = easter(d.year)
+    days = {date(d.year, 1, 1): "New Year", e - timedelta(2): "Good Friday", e + timedelta(1): "Easter Monday",
+            date(d.year, 5, 1): "Labour Day", e + timedelta(39): "Ascension", e + timedelta(50): "Whit Monday",
+            e + timedelta(60): "Corpus Christi", date(d.year, 10, 3): "German Unity Day",
+            date(d.year, 12, 25): "Christmas", date(d.year, 12, 26): "Boxing Day"}
+    return days.get(d)
 
 
 def get(url, **kw):
@@ -337,21 +359,28 @@ def watch():
     w = session()
     if not w:
         print("not a session start", now()); return
+    if holiday(now().date()):
+        print("public holiday:", holiday(now().date())); return
     back, f, t = w
     slot, end = max(hm(now().date(), f), now()), hm(now().date(), t)
-    hour, seen, last_html, pub = None, None, None, datetime.min
+    hour, seen, last_html, pub, pinged = None, None, None, datetime.min, datetime.min
     while slot <= end:
         time.sleep(max(0, (slot - now()).total_seconds()))
-        s = snapshot(back, live=True)
-        k = sig(s)
-        new = k - seen if seen is not None else frozenset()
-        if new or slot.hour != hour:  # hourly status, or straight away when a new problem shows up
-            notify(s, new); hour = slot.hour
-        seen = k
-        html = render(s)
-        # Pages allows ~10 builds an hour, so only republish every 10 min unless a problem appeared
-        if re.sub(r"as of \d\d:\d\d", "", html) != re.sub(r"as of \d\d:\d\d", "", last_html or "") and (new or now() - pub >= timedelta(minutes=10)):
-            publish(html); last_html, pub = html, now()
+        try:
+            s = snapshot(back, live=True)
+            k = sig(s)
+            new = k - seen if seen is not None else frozenset()
+            # hourly status, but not within 30 min of the last ping (a late start just before the hour)
+            hourly = slot.hour != hour and slot - pinged >= timedelta(minutes=30)
+            if new or hourly:  # or straight away when a new problem shows up
+                notify(s, new); pinged = slot
+            hour, seen = slot.hour, k
+            html = render(s)
+            # Pages allows ~10 builds an hour, so only republish every 10 min unless a problem appeared
+            if re.sub(r"as of \d\d:\d\d", "", html) != re.sub(r"as of \d\d:\d\d", "", last_html or "") and (new or now() - pub >= timedelta(minutes=10)):
+                publish(html); last_html, pub = html, now()
+        except Exception as e:  # a hiccup at RMV, ntfy or GitHub shouldn't end the whole session
+            print(f"{now():%H:%M} check failed: {type(e).__name__}: {e}")
         n = (now() + timedelta(minutes=STEP)).replace(second=0, microsecond=0)
         slot = n - timedelta(minutes=n.minute % STEP)
 

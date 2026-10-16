@@ -17,7 +17,7 @@ from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 import commute as c
-from commute import E, PM, T, TZ, get, hapi, hm, lookup, mins, now, place, trips
+from commute import E, PM, T, TZ, get, hapi, holiday, hm, lookup, mins, now, place, trips
 
 SEND, LEAVE, LATEST, EVENING = E("BRIEF_AT", "06:45"), E("BRIEF_LEAVE", "07:30"), "09:00", E("EVENING_AT", "20:00")
 RAINY, UA = 40, {"User-Agent": "commute-brief/1.0 (github.com/smarthipad-ai/commute)"}
@@ -166,7 +166,7 @@ def morning_trips(d):
 @cache
 def ics(name, d):
     # events on day d from the iCal feed in secret `name`: [(start, end, summary, all_day)]
-    url = E(name)
+    url = re.sub(r"^webcal://", "https://", E(name) or "", flags=re.I)  # subscribe links often use webcal://
     if not url:
         return None
     import icalendar, recurring_ical_events
@@ -189,7 +189,8 @@ def reminders(d, evening=False):
          birthday 03-14: Anna              yearly, also flagged the day before
          countdown 2026-12-19: holidays    "37 days until holidays" every day until then
     """
-    out = []
+    days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    out = []  # (icon, text, kind) with kind one of weekly / monthly / once / birthday / countdown
     for raw in (E("REMINDERS") or "").splitlines():
         if raw.lstrip().startswith("#"):
             continue
@@ -197,24 +198,29 @@ def reminders(d, evening=False):
         key, text = key.strip().lower(), text.strip()
         if not text:
             continue
-        if key[:3] in ("mon", "tue", "wed", "thu", "fri", "sat", "sun") and len(key) <= 9:
-            if ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].index(key[:3]) == d.weekday():
-                out.append(("📌", text))
-        elif m := re.fullmatch(r"day (\d{1,2})", key):
-            if int(m[1]) == d.day:
-                out.append(("📌", text))
-        elif m := re.fullmatch(r"birthday (\d{2})-(\d{2})", key):
-            for k, when in ((0, "tomorrow"),) if evening else ((0, "today"), (1, "tomorrow")):
-                if (d + timedelta(k)).strftime("%m-%d") == f"{m[1]}-{m[2]}":
-                    out.append(("🎂", f"{text}'s birthday {when}"))
-        elif m := re.fullmatch(r"countdown (\d{4}-\d{2}-\d{2})", key):
-            n = (date.fromisoformat(m[1]) - d).days
-            if n == 0:
-                out.append(("🎉", f"{text} — today!"))
-            elif n > 0:
-                out.append(("⏳", f"{n} day{'s' * (n != 1)} until {text}"))
-        elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", key) and date.fromisoformat(key) == d:
-            out.append(("📌", text))
+        try:
+            if key in days or key in [x[:3] for x in days]:
+                if days.index(next(x for x in days if x.startswith(key))) == d.weekday():
+                    out.append(("📌", text, "weekly"))
+            elif m := re.fullmatch(r"day (\d{1,2})", key):
+                if int(m[1]) == d.day:
+                    out.append(("📌", text, "monthly"))
+            elif m := re.fullmatch(r"birthday (\d{2})-(\d{2})", key):
+                for k, when in ((0, "tomorrow"),) if evening else ((0, "today"), (1, "tomorrow")):
+                    if (d + timedelta(k)).strftime("%m-%d") == f"{m[1]}-{m[2]}":
+                        out.append(("🎂", f"{text}'s birthday {when}", "birthday"))
+            elif m := re.fullmatch(r"countdown (\d{4}-\d{2}-\d{2})", key):
+                n = (date.fromisoformat(m[1]) - d).days
+                if n == 0:
+                    out.append(("🎉", f"{text} — today!", "once"))
+                elif n > 0:
+                    out.append(("⏳", f"{n} day{'s' * (n != 1)} until {text}", "countdown"))
+            elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", key) and date.fromisoformat(key) == d:
+                out.append(("📌", text, "once"))
+            else:
+                continue
+        except ValueError:  # e.g. 2026-02-30; skip just this line
+            print("bad reminder line:", raw)
     return out
 
 
@@ -319,7 +325,9 @@ def disruptions(d, evening):
             if active(m, windows):
                 seen.add(m["id"]); out.append(m["head"].strip())
     for m in hapi("himsearch").get("Message", []):
-        if m["id"] not in seen and "streik" in f"{m.get('head', '')} {m.get('text', '')}".lower() and active(m, [(hm(d, "05:00"), hm(d, "23:00"))]):
+        text = f"{m.get('head', '')} {m.get('lead', '')} {m.get('text', '')}".lower()
+        mine = any(p.get("lineId") in lines for p in m.get("affectedProduct", [])) or "frankfurt" in text
+        if m["id"] not in seen and "streik" in text and mine and active(m, [(hm(d, "05:00"), hm(d, "23:00"))]):
             seen.add(m["id"]); out.append("Strike: " + m["head"].strip())
     return Sec("⚠️", "Disruptions", out, "⚠️ disruption", "bad") if out else None
 
@@ -344,18 +352,22 @@ def bike(d, evening):
 
 
 def air_quality(d, evening):
-    out = []
+    out, bad = [], False
     aqi = max((x[1] or 0 for x in hourly(air(), d, "07:00", "20:00", "european_aqi")), default=0)
     if aqi >= 60:
+        bad = True
         out.append(f"Air quality {'very poor' if aqi >= 80 else 'poor'} (EAQI {round(aqi)}) — maybe skip the run outside")
     for k in ("alder", "birch", "grass", "mugwort", "ragweed"):
         v = max((x[1] or 0 for x in hourly(air(), d, "06:00", "20:00", f"{k}_pollen")), default=0)
         if v >= 20:
+            bad |= v >= 50
             out.append(f"{k.title()} pollen {'very high' if v >= 100 else 'high' if v >= 50 else 'moderate'} ({round(v)} grains/m³)")
     uv = daily(d, "uv_index_max")
     if uv and uv >= 6:
+        bad |= uv >= 8
         out.append(f"UV index {round(uv)} — sunscreen")
-    return Sec("🌿", "Air, pollen & sun", out, tone="warn") if out else None
+    # moderate pollen or UV is worth a line, not an evening ping
+    return Sec("🌿", "Air, pollen & sun", out, tone="warn" if bad else "info") if out else None
 
 
 def calendar(d, evening):
@@ -391,8 +403,10 @@ def bins(d, evening):
 def notes(d, evening):
     r = reminders(d, evening)
     if evening:  # countdowns are for the morning; everything else is worth knowing the night before
-        r = [x for x in r if x[0] != "⏳"]
-    return Sec("📌", "Today" if not evening else "Tomorrow", [f"{i} {t}" for i, t in r], tone="warn" if evening else "info") if r else None
+        r = [x for x in r if x[2] != "countdown"]
+    # only one-offs, bills and birthdays make the evening heads-up worth sending; weekly routines just ride along
+    tone = "warn" if evening and any(k != "weekly" for _, _, k in r) else "info"
+    return Sec("📌", "Today" if not evening else "Tomorrow", [f"{i} {t}" for i, t, _ in r], tone=tone) if r else None
 
 
 def sun(d, evening):
@@ -427,28 +441,6 @@ TONE_ORDER = {"bad": 0, "warn": 1, "info": 2, "ok": 2}
 
 
 # --- assembly ---------------------------------------------------------------
-
-def easter(y):
-    a, b, cc = y % 19, y // 100, y % 100
-    dd, e = b // 4, b % 4
-    g = (8 * b + 13) // 25
-    h = (19 * a + b - dd - g + 15) % 30
-    i, k = cc // 4, cc % 4
-    l = (32 + 2 * e + 2 * i - h - k) % 7
-    m = (a + 11 * h + 19 * l) // 433
-    n = (h + l - 7 * m + 90) // 25
-    return date(y, n, (h + l - 7 * m + 33 * n + 19) % 32)
-
-
-def holiday(d):
-    # public holidays in Hesse
-    e = easter(d.year)
-    days = {date(d.year, 1, 1): "New Year", e - timedelta(2): "Good Friday", e + timedelta(1): "Easter Monday",
-            date(d.year, 5, 1): "Labour Day", e + timedelta(39): "Ascension", e + timedelta(50): "Whit Monday",
-            e + timedelta(60): "Corpus Christi", date(d.year, 10, 3): "German Unity Day",
-            date(d.year, 12, 25): "Christmas", date(d.year, 12, 26): "Boxing Day"}
-    return days.get(d)
-
 
 def next_workday(d):
     d += timedelta(1)
@@ -572,7 +564,7 @@ def mode():
             return name
 
 
-def follow_up(d, secs):
+def follow_up(d):
     # keep an eye on the 07:30 trips until the live notifier takes over at 07:00; ping only on a new problem
     seen = c.sig(dict(opts=morning_trips(d)[0]))
     while now() + timedelta(minutes=5) < hm(d, c.AM[0]):
@@ -629,7 +621,7 @@ def main():
     secs, title, body = run(d, False, None if force else hm(today, SEND))
     send(title, body, pic=picture(today))
     if not force and d == today:
-        follow_up(d, secs)
+        follow_up(d)
 
 
 if __name__ == "__main__":
