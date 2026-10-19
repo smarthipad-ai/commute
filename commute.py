@@ -345,13 +345,13 @@ def sig(s):
 
 
 def session():
-    # (back, from, to) for the session this run belongs to, or None
-    n, sched = now(), E("SCHEDULE")
-    if sched:  # cron is in UTC; both DST variants fire, only the one landing just before a session counts
-        mi, h = map(int, sched.split()[:2])
-        n = datetime.now(ZoneInfo("UTC")).replace(hour=h, minute=mi, second=0, microsecond=0).astimezone(TZ).replace(tzinfo=None)
+    # (back, from, to) for the session that is under way or about to start, or None. Decided from the actual time because
+    # GitHub's scheduler can be hours late and fires both DST variants of a cron; extra runs just find no session and exit.
+    n = now()
+    if n.weekday() > 4:
+        return None
     for back, (f, t) in ((False, AM), (True, PM)):
-        if hm(n.date(), f) - timedelta(minutes=30) <= n <= (hm(n.date(), f) if sched else hm(n.date(), t)):
+        if hm(n.date(), f) - timedelta(minutes=45) <= n <= hm(n.date(), t):
             return back, f, t
 
 

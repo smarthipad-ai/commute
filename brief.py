@@ -113,10 +113,15 @@ def rain(d, frm, to):
     return (f"{DESC.get(code, 'rain').lower()} likely, {p}% at {T(t)}" if p >= RAINY else f"dry (max {p}%)"), p >= RAINY
 
 
+def leave_from(d):
+    # normally 07:30; a run that starts later the same morning (GitHub can be hours late) looks from now on instead
+    return max(hm(d, LEAVE), now()) if d == now().date() else hm(d, LEAVE)
+
+
 @cache
 def morning_trips(d):
     (o, _), (w, _) = place(E("HOME_ADDR")), place(E("WORK_ADDR"))
-    lf = hm(d, LEAVE)
+    lf = leave_from(d)
     return trips(o, w, lf, lf + timedelta(minutes=30))
 
 
@@ -304,7 +309,8 @@ def way_home(d, evening):
 def train(d, evening):
     opts, rec = morning_trips(d)
     if not opts:
-        return Sec("🚆", f"Leaving at {LEAVE}", [f"RMV returned no connections leaving {LEAVE}."], f"⚠️ no trains from {LEAVE}", "bad")
+        at = T(leave_from(d))
+        return Sec("🚆", f"Leaving at {at}", [f"RMV returned no connections leaving {at}."], f"⚠️ no trains from {at}", "bad")
     show = opts[:2] + ([rec] if rec and rec not in opts[:2] else [])  # backup: the first clean trip if the first two have problems
     lines, trips_ = [], []
     for m in show:
@@ -327,8 +333,8 @@ def train(d, evening):
                            minutes=round((m["arr"] - m["leave"]).total_seconds() / 60), issue=m["issues"][0][2] if m["issues"] else None,
                            rides=[dict(name=r["name"], kind=r["kind"], dep=T(r["dep"]), track=r["track"], occ=r.get("occ", 0),
                                        delay=r["delay"]) for r in m["rides"]]))
-    head = f"Leave {T(rec['leave'])} → arrive {T(rec['arr'])}" if rec else f"⚠️ no clean trip from {LEAVE}"
-    return Sec("🚆", f"If you leave at {LEAVE}", lines, head, "ok" if rec is opts[0] else "warn" if rec else "bad", "train",
+    head = f"Leave {T(rec['leave'])} → arrive {T(rec['arr'])}" if rec else f"⚠️ no clean trip from {T(leave_from(d))}"
+    return Sec("🚆", f"If you leave at {T(leave_from(d))}", lines, head, "ok" if rec is opts[0] else "warn" if rec else "bad", "train",
                dict(trips=trips_, rec=rec and dict(leave=rec["leave"].replace(tzinfo=TZ).isoformat(), arr=rec["arr"].isoformat()),
                     today=d == now().date(), occ=OCC))
 
@@ -433,7 +439,7 @@ def calendar(d, evening):
     _, rec = morning_trips(d)
     warn = None
     if timed and rec and timed[0][0] < rec["arr"] + timedelta(minutes=10):
-        warn = f"First meeting {T(timed[0][0])} — leaving at {LEAVE} you'd arrive {T(rec['arr'])}"
+        warn = f"First meeting {T(timed[0][0])} — leaving at {T(leave_from(d))} you'd arrive {T(rec['arr'])}"
         lines.insert(0, f"⚠ {warn}")
     return Sec("📅", "Calendar", lines, f"📅 {T(timed[0][0])}" if timed else None, "warn" if warn else "info", "calendar",
                dict(allday=allday, events=[(T(s), T(e), t) for s, e, t, _ in timed[:6]], warn=warn))
@@ -602,12 +608,12 @@ def message(secs, d, evening):
     return title, "\n".join(body)
 
 
-def send(title, body, tag="sunrise", pic=None, priority=3):
+def send(title, body, tag="sunrise", pic=None, priority=3, marker=None):
     print(title, body, sep="\n")
     if not E("NTFY_TOPIC"):
         return
     url = (E("PAGE_URL") or "") + "brief/"
-    msg = {"topic": E("NTFY_TOPIC"), "title": title, "message": body, "tags": [tag], "priority": priority, "click": url,
+    msg = {"topic": E("NTFY_TOPIC"), "title": title, "message": body, "tags": [tag] + ([marker] if marker else []), "priority": priority, "click": url,
            "actions": [{"action": "view", "label": "Open brief", "url": url}]}
     if pic:
         msg["attach"] = pic["thumb"]
@@ -615,15 +621,26 @@ def send(title, body, tag="sunrise", pic=None, priority=3):
 
 
 def mode():
-    # which scheduled run this is: "morning", "evening" or None. Both DST variants of each cron fire; only one lands right.
-    sched = E("SCHEDULE")
-    if not sched:
-        return None
-    mi, h = map(int, sched.split()[:2])
-    t = datetime.now(ZoneInfo("UTC")).replace(hour=h, minute=mi, second=0, microsecond=0).astimezone(TZ).replace(tzinfo=None)
-    for name, at in (("morning", SEND), ("evening", EVENING)):
-        if hm(t.date(), at) - timedelta(hours=1) <= t <= hm(t.date(), at):
-            return name
+    # "morning", "evening" or None, from the actual time. GitHub's scheduler is often late and fires both DST variants of a cron,
+    # so this accepts a wide window; sent_today() makes the extra runs stand down.
+    n = now()
+    if n.weekday() < 5 and hm(n.date(), "05:00") <= n <= hm(n.date(), LATEST):
+        return "morning"
+    if n.weekday() in (6, 0, 1, 2, 3) and hm(n.date(), "18:00") <= n <= hm(n.date(), "23:00"):
+        return "evening"
+
+
+def sent_today(marker):
+    # ntfy keeps about 12 h of messages; if a twin run already sent this ping, stand down
+    topic = E("NTFY_TOPIC")
+    if not topic:
+        return False
+    try:
+        raw = retry(lambda: get(f"https://ntfy.sh/{topic}/json?poll=1&since=14h")).decode()
+        return any(marker in (json.loads(x).get("tags") or []) for x in raw.splitlines() if x.strip())
+    except Exception as e:  # better a rare duplicate than a missing brief
+        print("duplicate check failed:", e)
+        return False
 
 
 def follow_up(d):
@@ -662,16 +679,18 @@ def main():
     force = E("FORCE") == "true" or "--now" in a or "--evening" in a
     m = "evening" if "--evening" in a else mode() if not force else "morning"
     today = now().date()
-    if not force and m is None and E("SCHEDULE"):
+    if not force and m is None:
         print("not this run", now()); return
     if m == "evening":
         d = next_workday(today)
         if not force and d != today + timedelta(1):  # weekend or holiday tomorrow
             print("no workday tomorrow"); return
+        if not force and sent_today(f"evening-{d}"):
+            print("already sent"); return
         secs, title, body = run(d, True, None if force else hm(today, EVENING))
         # stay quiet unless something needs doing tonight or tomorrow early; Sunday always gets a preview of the week
         if force or today.weekday() == 6 or any(s.tone in ("warn", "bad") and s.title != "Way home" for s in secs):
-            send(title, body, "crescent_moon")
+            send(title, body, "crescent_moon", marker=f"evening-{d}")
         else:
             print("nothing worth a ping tonight")
         return
@@ -680,10 +699,13 @@ def main():
             print("no brief today:", holiday(today) or "weekend"); return
         if now() > hm(today, LATEST):
             print("too late to send", now()); return
+        if sent_today(f"brief-{today}"):
+            print("already sent"); return
         time.sleep(max(0, (hm(today, SEND) - now()).total_seconds() - 90))  # fetch shortly before 06:45
-    d = today if (now() < hm(today, LEAVE) and today.weekday() < 5 and not holiday(today)) else next_workday(today)
+    # a morning brief is for today until 09:00, even if this run started after the 07:30 departure
+    d = today if (now() <= hm(today, LATEST) and today.weekday() < 5 and not holiday(today)) else next_workday(today)
     secs, title, body = run(d, False, None if force else hm(today, SEND))
-    send(title, body, pic=picture(today))
+    send(title, body, pic=picture(today), marker=f"brief-{d}" if d == today else None)
     if not force and d == today:
         follow_up(d)
 

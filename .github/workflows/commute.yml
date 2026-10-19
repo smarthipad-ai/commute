@@ -1,12 +1,22 @@
 name: commute
 on:
   schedule:
-    # 06:40 and 14:40 Berlin time; each pair covers summer and winter time (UTC+2 / UTC+1)
-    - cron: "40 4 * * 1-5"
-    - cron: "40 5 * * 1-5"
-    - cron: "40 12 * * 1-5"
-    - cron: "40 13 * * 1-5"
+    # Berlin is UTC+2 in summer, UTC+1 in winter. GitHub's scheduler is best-effort and often hours late, so there are several
+    # triggers; commute.py decides from the actual time and an extra run simply finds no session to cover.
+    - cron: "20 4 * * 1-5"    # morning session 07:00-09:00 (starts ~06:20 Berlin)
+    - cron: "50 4 * * 1-5"
+    - cron: "20 5 * * 1-5"
+    - cron: "50 5 * * 1-5"
+    - cron: "20 12 * * 1-5"   # afternoon session 15:00-17:30 (starts ~14:20 Berlin)
+    - cron: "50 12 * * 1-5"
+    - cron: "20 13 * * 1-5"
+    - cron: "50 13 * * 1-5"
   workflow_dispatch:
+    inputs:
+      session:
+        description: "Run the live session for the current morning/afternoon window instead of sending one ping"
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency: commute
@@ -30,5 +40,4 @@ jobs:
           WORK_ADDR: ${{ secrets.WORK_ADDR }}
           PAGE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
           GH_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
-          FORCE: ${{ github.event_name == 'workflow_dispatch' }}
-          SCHEDULE: ${{ github.event.schedule }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && !inputs.session }}
