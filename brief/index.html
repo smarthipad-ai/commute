@@ -1,0 +1,183 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#1b2433"><title>Tomorrow</title>
+<script>document.documentElement.classList.add('js')</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f2eee6;--card:#fffdf9;--ink:#1b1a17;--mute:#7a746a;--line:#ebe5d8;--soft:#f5f1e8;--sun:#f59e0b;--rain:#3b82f6;--ok:#15803d;--okb:#e3f5e8;
+--warn:#b45309;--warnb:#fdf0dc;--bad:#c62828;--badb:#fde9e7;--u:#1b64b0;--s:#2f8f3a;--bus:#8b3a8f;--tram:#c4322a;--rail:#6b6b6b;--r:22px;
+--shadow:0 1px 1px rgba(60,40,10,.04),0 12px 30px -16px rgba(60,40,10,.28)}
+@media (prefers-color-scheme:dark){:root{--bg:#0d0e10;--card:#17181b;--ink:#f3f1ec;--mute:#9d988d;--line:#2a2b2f;--soft:#1f2024;--ok:#4ade80;--okb:#10301c;
+--warn:#fbbf24;--warnb:#33260c;--bad:#ff8a80;--badb:#3a1512;--shadow:0 1px 0 rgba(255,255,255,.04),0 14px 34px -16px rgba(0,0,0,.7)}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+/* hero */
+.hero{position:relative;min-height:min(88svh,640px);color:#fff;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;isolation:isolate;background:#1b2433}
+.hero .bg{position:absolute;inset:-5%;z-index:-3;background-size:cover;background-position:center;animation:kb 34s ease-in-out infinite alternate;will-change:transform}
+@keyframes kb{from{transform:scale(1) translate3d(0,0,0)}to{transform:scale(1.1) translate3d(-1.6%,-1.2%,0)}}
+.hero:before{content:"";position:absolute;inset:0;z-index:-2;background:linear-gradient(180deg,rgba(8,12,22,.6) 0%,rgba(8,12,22,.08) 30%,rgba(8,12,22,.32) 58%,rgba(8,12,22,.9) 100%)}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}
+.top{position:absolute;top:0;left:0;right:0;max-width:640px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 16px) 18px 0;display:flex;justify-content:space-between;gap:8px}
+.gl{background:rgba(255,255,255,.14);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);border:1px solid rgba(255,255,255,.26);border-radius:18px;box-shadow:0 8px 24px -10px rgba(0,0,0,.45)}
+.pillsm{padding:6px 12px;font-size:12px;font-weight:600;letter-spacing:.02em;border-radius:99px}
+.hi{width:100%;max-width:640px;margin:0 auto;padding:110px 18px 56px}
+h1{font:700 clamp(34px,9vw,50px)/1.04 Fraunces,Georgia,serif;margin:0 0 20px;letter-spacing:-.01em;text-shadow:0 2px 24px rgba(0,0,0,.4)}
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+.chips .gl{display:flex;align-items:center;gap:10px;padding:10px 16px}
+.chips b{display:block;font:600 28px/1.1 Fraunces,Georgia,serif;font-variant-numeric:tabular-nums}.chips b.small{font-size:20px}
+.chips u{text-decoration:none;opacity:.6;margin:0 5px;font-size:20px}.chips small{display:block;font-size:12px;opacity:.88}
+.chips .em{font-size:30px;line-height:1}.leave{flex-direction:column;align-items:flex-start!important;gap:0!important}
+.cd{margin-left:6px;font-weight:600}.cd:before{content:"· "}.cd:empty:before{content:""}
+blockquote{margin:0;max-width:520px;font:500 clamp(17px,4.6vw,21px)/1.4 Fraunces,Georgia,serif;text-shadow:0 1px 14px rgba(0,0,0,.5);position:relative;padding-left:14px;border-left:3px solid rgba(255,255,255,.55)}
+cite{display:block;font:400 13px Inter,sans-serif;opacity:.85;margin-top:8px;font-style:normal}
+.cue{position:absolute;left:50%;bottom:30px;width:26px;height:26px;margin-left:-13px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;opacity:.8;animation:bob 2.2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(7px)}}
+.fu{opacity:0;transform:translateY(16px);animation:fu .9s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(var(--d,0)*120ms + 150ms)}
+@keyframes fu{to{opacity:1;transform:none}}
+/* cards */
+main{max-width:640px;margin:-34px auto 0;padding:0 14px 44px;position:relative}
+.card{position:relative;background:var(--card);border-radius:var(--r);padding:18px;margin:0 0 14px;box-shadow:var(--shadow);border:1px solid var(--line);overflow:hidden}
+.card h2{display:flex;align-items:center;gap:10px;margin:0 0 12px;font:600 11.5px/1 Inter,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:var(--mute)}
+.ic{display:grid;place-items:center;width:30px;height:30px;border-radius:10px;background:var(--soft);font-size:16px;letter-spacing:0;flex:none}
+.card p{margin:6px 0}.card h3{margin:14px 0 6px;font:600 12px/1 Inter;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.lead{font-size:16px;font-weight:600;line-height:1.4}.muted,.src{color:var(--mute);font-size:13px}.src{margin:12px 0 0;font-size:11.5px}.center{text-align:center}
+.card.warn{box-shadow:inset 4px 0 0 var(--warn),var(--shadow)}.card.warn .ic{background:var(--warnb)}
+.card.bad{box-shadow:inset 4px 0 0 var(--bad),var(--shadow);background:linear-gradient(100deg,var(--badb),var(--card) 55%)}
+.card.bad .ic{background:var(--badb);animation:pulse 2.2s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(198,40,40,.45)}70%,100%{box-shadow:0 0 0 12px rgba(198,40,40,0)}}
+.slim{display:flex;gap:14px;align-items:flex-start;padding:14px 18px}.slim h2{margin-bottom:4px}.slim p{margin:0;font-size:14.5px}.slim .ic{width:38px;height:38px;font-size:20px;border-radius:12px}
+.alertline{font-weight:600;color:var(--bad)}.card.warn .alertline{color:var(--warn)}
+.pill{display:inline-block;padding:3px 10px;border-radius:99px;background:var(--soft);font-size:12px;font-weight:600}.warnpill{background:var(--warnb);color:var(--warn)}
+.banner{background:var(--warnb);color:var(--warn);padding:9px 12px;border-radius:12px;font-weight:600;font-size:13.5px}
+/* reveal + draw animations (only with JS, so the page is complete without it) */
+.js .r{opacity:0;transform:translateY(22px) scale(.985);transition:opacity .7s cubic-bezier(.2,.8,.2,1),transform .7s cubic-bezier(.2,.8,.2,1);transition-delay:calc(var(--d,0)*70ms)}
+.js .r.in{opacity:1;transform:none}
+.js .draw{stroke-dasharray:1;stroke-dashoffset:1}.js .in .draw{animation:draw 1.6s .25s cubic-bezier(.4,0,.2,1) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.js .fade{opacity:0}.js .in .fade{animation:fade .8s .9s ease forwards}@keyframes fade{to{opacity:1}}
+.js .bar{transform:scaleY(0)}.js .in .bar{animation:growy .8s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(var(--k,0)*45ms + .25s)}
+@keyframes growy{to{transform:scaleY(1)}}
+.js .seg{transform:scaleX(0)}.js .in .seg{animation:growx .7s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(var(--k,0)*110ms + .2s)}
+@keyframes growx{to{transform:scaleX(1)}}
+/* weather chart + sky */
+.chart{width:100%;height:auto;display:block;margin-top:8px;overflow:visible}.chart .bar,.rb .bar{transform-box:fill-box;transform-origin:bottom}
+.axis{stroke:var(--line);stroke-width:1.5}.rainbar{fill:var(--rain);opacity:.32}.pct{font:600 10px Inter;fill:var(--rain)}
+.area{fill:url(#ag)}.tline{fill:none;stroke:var(--sun);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 4px 6px rgba(245,158,11,.35))}
+.dot{fill:var(--card);stroke:var(--sun);stroke-width:2.6}.tlabel{font:700 12.5px Inter;fill:var(--ink)}.emo{font-size:17px}.hlabel{font:500 11px Inter;fill:var(--mute)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--mute);margin:10px 0 0}.legend span{display:flex;align-items:center;gap:6px}
+.lg{display:inline-block;width:14px;height:4px;border-radius:3px;background:var(--sun)}.lg.rain{background:var(--rain);opacity:.5;height:10px;width:8px;border-radius:2px}
+.skygrid{display:grid;grid-template-columns:1.7fr 1fr;gap:14px;align-items:center}.sunarc{width:100%;height:auto;display:block}
+.sunarc .track{fill:none;stroke:var(--line);stroke-width:3;stroke-dasharray:2 6;stroke-linecap:round}.sunarc .prog{fill:none;stroke:var(--sun);stroke-width:4;stroke-linecap:round}
+.sun{fill:var(--sun)}.halo{fill:var(--sun);opacity:.25;animation:halo 3s ease-in-out infinite;transform-box:fill-box;transform-origin:center}.sunpos.night{opacity:.45!important}
+@keyframes halo{0%,100%{transform:scale(1);opacity:.28}50%{transform:scale(1.5);opacity:.08}}
+.moonbox{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px}.moon{width:76px;height:76px;filter:drop-shadow(0 0 14px rgba(250,240,200,.35));animation:float 6s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.moon .dark{fill:#2a2f3d}.moon .lit{fill:#f6efd2}.moon .rim{fill:none;stroke:rgba(0,0,0,.15);stroke-width:1}
+/* trains */
+.trip{padding:12px 0;border-top:1px solid var(--line)}.trip:first-of-type{border-top:0;padding-top:2px}
+.trow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}.trow b{font:600 24px/1 Fraunces,Georgia,serif;font-variant-numeric:tabular-nums}
+.trip.rec .trow b{color:var(--ok)}.dur{flex:1;text-align:center;color:var(--mute);font-size:12px;position:relative}
+.dur:before,.dur:after{content:"";position:absolute;top:50%;width:calc(50% - 30px);border-top:1.5px dashed var(--line)}.dur:before{left:0}.dur:after{right:0}
+.bar{display:flex;gap:3px;height:34px}.seg{display:grid;place-items:center;border-radius:11px;color:#fff;font:700 12px Inter;min-width:5px;background:var(--rail);transform-origin:left;overflow:hidden;white-space:nowrap}
+.seg em{font-style:normal}.seg.s{background:var(--s)}.seg.u{background:var(--u)}.seg.bus{background:var(--bus)}.seg.tram{background:var(--tram)}
+.seg.walk{background:repeating-linear-gradient(90deg,var(--line) 0 5px,transparent 5px 10px);color:var(--mute)}.seg.wait{background:var(--soft)}
+.tmeta{display:flex;justify-content:space-between;gap:10px;margin-top:9px;align-items:flex-start}.rides{list-style:none;margin:0;padding:0;display:grid;gap:5px;font-size:13.5px}
+.rides li{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.chip{display:inline-block;color:#fff;font-weight:700;font-size:12px;padding:2px 8px;border-radius:6px;background:var(--rail)}
+.chip.u{background:var(--u)}.chip.s{background:var(--s);border-radius:10px}.chip.bus{background:var(--bus)}.chip.tram{background:var(--tram)}
+.delay{color:var(--bad);font-weight:700;font-size:12px}.occ{display:inline-flex;gap:2px}.occ i{width:5px;height:11px;border-radius:2px;background:var(--line)}.occ i.on{background:var(--warn)}.occl{font-size:12px}
+.tright{display:flex;flex-direction:column;align-items:flex-end;gap:5px}.st{font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px}.st.ok{color:var(--ok);background:var(--okb)}.st.bad{color:var(--bad);background:var(--badb)}
+.badge{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;color:var(--warn)}.badge.good{color:var(--ok)}
+/* rain on the way home, radar */
+.rainbars{display:flex;gap:8px;align-items:flex-end;height:96px;margin-top:10px}.rb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:3px;font-size:11px;color:var(--mute)}
+.rb .bar{display:block;width:100%;max-width:34px;height:var(--h);min-height:3px;border-radius:7px;background:linear-gradient(to top,var(--rain),#93c5fd)}.rb b{font-size:11.5px;color:var(--ink)}
+.map{position:relative;height:250px;border-radius:16px;overflow:hidden;background:var(--soft)}.map .shimmer{position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.25) 50%,transparent 70%);animation:sh 1.6s infinite}
+@keyframes sh{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.basemap{filter:saturate(.55) brightness(1.04) contrast(.92)}
+@media (prefers-color-scheme:dark){.basemap{filter:invert(1) hue-rotate(180deg) saturate(.5) brightness(.82) contrast(.9)}}
+.mapbar{position:absolute;left:10px;right:10px;bottom:30px;z-index:500;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:12px;background:rgba(255,255,255,.88);color:#111;font:600 12px Inter;backdrop-filter:blur(8px)}
+@media (prefers-color-scheme:dark){.mapbar{background:rgba(23,24,27,.88);color:#eee}}
+.mapbar button{all:unset;cursor:pointer;width:26px;height:26px;border-radius:50%;background:var(--rain);color:#fff;display:grid;place-items:center;font-size:11px}
+.prog2{flex:1;height:4px;border-radius:3px;background:rgba(120,120,120,.3);overflow:hidden}.prog2 i{display:block;height:100%;width:0;background:var(--rain);transition:width .3s linear}
+/* calendar, bins, notes */
+.timeline{list-style:none;margin:10px 0 0;padding:0}.timeline li{display:grid;grid-template-columns:52px 1fr;gap:2px 12px;padding:8px 0 8px 14px;border-left:3px solid var(--line);position:relative}
+.timeline li:before{content:"";position:absolute;left:-7px;top:13px;width:11px;height:11px;border-radius:50%;background:var(--card);border:3px solid var(--rain)}
+.timeline b{font-variant-numeric:tabular-nums}.timeline .muted{grid-row:2;font-size:12px}.timeline p{grid-column:2;grid-row:1/3;margin:0;align-self:center;font-weight:500}
+.bins{display:flex;gap:18px;flex-wrap:wrap;margin-top:6px}.bincell{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--mute)}
+.binsvg{width:46px;height:54px}.binsvg .body{fill:var(--c)}.binsvg .lid rect{fill:var(--c);filter:brightness(1.18)}.binsvg .ribs{stroke:rgba(255,255,255,.4);stroke-width:2.5;stroke-linecap:round;fill:none}
+.binsvg .lid{transform-box:fill-box;transform-origin:left bottom}.js .in .binsvg .lid{animation:lid 1s calc(var(--k)*160ms + .5s) ease}@keyframes lid{0%,100%{transform:rotate(0)}35%{transform:rotate(-18deg)}}
+.notes{list-style:none;margin:0;padding:0;display:grid;gap:9px}.notes li{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:14px;background:var(--soft);font-weight:500}.notes span{font-size:20px}
+/* news, learning */
+.news{list-style:none;margin:0;padding:0}.news li+li{border-top:1px solid var(--line)}.news a{display:block;text-decoration:none;padding:10px 0}
+.news .nt{display:block;font-weight:600;line-height:1.35}.news a:hover .nt{text-decoration:underline}.news .muted{font-size:12px}
+.year{font:700 64px/1 Fraunces,Georgia,serif;color:transparent;-webkit-text-stroke:1.5px var(--line);margin-bottom:-6px;letter-spacing:-.02em}
+.article{display:flex;gap:14px;align-items:flex-start}.article img{width:96px;height:96px;object-fit:cover;border-radius:14px;flex:none;box-shadow:var(--shadow)}.article h3{margin:0 0 6px;font:600 17px/1.3 Fraunces,Georgia,serif;text-transform:none;letter-spacing:0;color:var(--ink)}
+.article p{margin:0 0 8px;font-size:14px;color:var(--mute)}.article a{font-weight:600;font-size:13px}
+.wordhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.word{font:700 clamp(32px,9vw,42px)/1.1 Fraunces,Georgia,serif;letter-spacing:-.01em}
+.word{overflow-wrap:anywhere;hyphens:auto}.word.long{font-size:clamp(24px,7.4vw,34px)}
+.gender{font:700 12px Inter;text-transform:uppercase;letter-spacing:.06em;padding:3px 9px;border-radius:99px;color:#fff;background:var(--rail)}.gender.der{background:#2563eb}.gender.die{background:#db2777}.gender.das{background:#16a34a}
+.example{margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--soft);font-style:italic}.example .muted{font-style:normal}
+/* river, markets */
+.gauge{position:relative;height:16px;border-radius:99px;background:var(--soft);overflow:hidden;margin-top:6px}.gauge .fill{height:100%;width:var(--w);border-radius:99px;background:linear-gradient(90deg,#38bdf8,#2563eb,#38bdf8);background-size:200% 100%;animation:wave 4s linear infinite}
+.gauge.high .fill{background:linear-gradient(90deg,#f59e0b,#dc2626,#f59e0b);background-size:200% 100%}@keyframes wave{to{background-position:-200% 0}}
+.js .gauge .fill{width:0;transition:width 1.4s cubic-bezier(.2,.8,.2,1) .3s}.js .in .gauge .fill{width:var(--w)}.mark{position:absolute;top:0;bottom:0;width:2px;background:var(--bad)}
+.gaugelab{display:flex;justify-content:space-between;margin-top:8px;font-weight:600}.gaugelab small{font-weight:400}
+.ticker{list-style:none;margin:0;padding:0}.ticker li{display:grid;grid-template-columns:1fr 84px auto;gap:12px;align-items:center;padding:9px 0}.ticker li+li{border-top:1px solid var(--line)}
+.lab{font-weight:600}.val{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}.val em{display:block;font-style:normal;font-size:12px;font-weight:600}.up{color:var(--ok)}.down{color:var(--bad)}
+.spark{width:84px;height:28px;overflow:visible}.spark path{fill:none;stroke-width:2.2;stroke-linecap:round}.spark.up path,.spark.up circle{stroke:var(--ok);fill:var(--ok)}.spark.down path,.spark.down circle{stroke:var(--bad);fill:var(--bad)}.spark path{fill:none!important}
+footer{color:var(--mute);font-size:12px;text-align:center;padding:10px 12px 0}footer p{margin:5px 0}
+@media (min-width:700px){.hero{min-height:560px}.card{padding:22px}}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}
+.js .r,.js .fade,.js .seg,.js .bar,.fu{opacity:1!important;transform:none!important}.js .draw{stroke-dashoffset:0!important}.js .gauge .fill{width:var(--w)!important}}
+</style></head><body>
+<header class="hero" data-fx="rain"><div class="bg" style="background-image:url('https://thumb.wikimedia.org/wikipedia/commons/thumb/5/51/Red_Dragon_scuplture_during_River_Lee_flooding%2C_October_2023.jpg/1280px-Red_Dragon_scuplture_during_River_Lee_flooding%2C_October_2023.jpg')"></div><canvas aria-hidden="true"></canvas>
+<div class="top"><span class="gl pillsm">📍 Frankfurt</span><span class="gl pillsm">Friday, 23 October</span></div>
+<div class="hi"><h1 class="fu" style="--d:1">Tomorrow, Friday</h1><div class="chips"><div class="gl temp fu" style="--d:3"><span class="em">🌧</span><div><b><i data-count="9">9</i>°<u>→</u><i data-count="15">15</i>°</b><small>Light rain</small></div></div><div class="gl leave fu" style="--d:4"><small>Leave by</small><b>07:38</b><small>arrive 08:29<span class="cd"></span></small></div><div class="gl fu" style="--d:5"><span class="em">☂️</span><div><b class="small">Umbrella</b><small>on the way home</small></div></div></div></div>
+<svg class="cue" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></header>
+<main><section class="card r warn k-alert" style="--d:0"><h2><span class="ic">🚨</span>Weather warning</h2><p class="alertline">Official WARNING of GALE-FORCE GUSTS (15:00–22:00)</p><p class="alertline">Official WARNING of WIND GUSTS (12:00–04:00)</p></section><section class="card r info k-weather" style="--d:1"><h2><span class="ic">🌧</span>Weather</h2><p class="lead">Tomorrow 9°–15°, light rain · morning walk light rain likely, 67% at 09:00</p><svg class="chart" viewBox="0 0 560 214" role="img" aria-label="Temperature and rain chance by hour"><defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--sun);stop-opacity:.38"/><stop offset="1" style="stop-color:var(--sun);stop-opacity:0"/></linearGradient></defs><line x1="22" x2="538" y1="182" y2="182" class="axis"/><rect class="bar rainbar" style="--k:0" x="15.0" y="167.7" width="14" height="14.3" rx="4"/><text class="pct" x="22.0" y="162.7" text-anchor="middle">31%</text><rect class="bar rainbar" style="--k:1" x="58.0" y="160.4" width="14" height="21.6" rx="4"/><text class="pct" x="65.0" y="155.4" text-anchor="middle">47%</text><rect class="bar rainbar" style="--k:2" x="101.0" y="151.2" width="14" height="30.8" rx="4"/><text class="pct" x="108.0" y="146.2" text-anchor="middle">67%</text><rect class="bar rainbar" style="--k:3" x="144.0" y="141.1" width="14" height="40.9" rx="4"/><text class="pct" x="151.0" y="136.1" text-anchor="middle">89%</text><rect class="bar rainbar" style="--k:4" x="187.0" y="136.0" width="14" height="46.0" rx="4"/><text class="pct" x="194.0" y="131.0" text-anchor="middle">100%</text><rect class="bar rainbar" style="--k:5" x="230.0" y="140.6" width="14" height="41.4" rx="4"/><text class="pct" x="237.0" y="135.6" text-anchor="middle">90%</text><rect class="bar rainbar" style="--k:6" x="273.0" y="150.3" width="14" height="31.7" rx="4"/><text class="pct" x="280.0" y="145.3" text-anchor="middle">69%</text><rect class="bar rainbar" style="--k:7" x="316.0" y="155.8" width="14" height="26.2" rx="4"/><text class="pct" x="323.0" y="150.8" text-anchor="middle">57%</text><rect class="bar rainbar" style="--k:8" x="359.0" y="152.6" width="14" height="29.4" rx="4"/><text class="pct" x="366.0" y="147.6" text-anchor="middle">64%</text><rect class="bar rainbar" style="--k:9" x="402.0" y="145.2" width="14" height="36.8" rx="4"/><text class="pct" x="409.0" y="140.2" text-anchor="middle">80%</text><rect class="bar rainbar" style="--k:10" x="445.0" y="140.6" width="14" height="41.4" rx="4"/><text class="pct" x="452.0" y="135.6" text-anchor="middle">90%</text><rect class="bar rainbar" style="--k:11" x="488.0" y="141.5" width="14" height="40.5" rx="4"/><text class="pct" x="495.0" y="136.5" text-anchor="middle">88%</text><rect class="bar rainbar" style="--k:12" x="531.0" y="144.7" width="14" height="37.3" rx="4"/><text class="pct" x="538.0" y="139.7" text-anchor="middle">81%</text><path class="fade area" d="M22.0,126.0 C43.5,126.0 43.5,126.0 65.0,126.0 C86.5,126.0 86.5,122.5 108.0,122.5 C129.5,122.5 129.5,120.2 151.0,120.2 C172.5,120.2 172.5,113.2 194.0,113.2 C215.5,113.2 215.5,102.7 237.0,102.7 C258.5,102.7 258.5,93.3 280.0,93.3 C301.5,93.3 301.5,73.5 323.0,73.5 C344.5,73.5 344.5,59.5 366.0,59.5 C387.5,59.5 387.5,58.3 409.0,58.3 C430.5,58.3 430.5,66.5 452.0,66.5 C473.5,66.5 473.5,74.7 495.0,74.7 C516.5,74.7 516.5,85.2 538.0,85.2 L538.0,182 L22.0,182 Z"/><path class="draw tline" pathLength="1" d="M22.0,126.0 C43.5,126.0 43.5,126.0 65.0,126.0 C86.5,126.0 86.5,122.5 108.0,122.5 C129.5,122.5 129.5,120.2 151.0,120.2 C172.5,120.2 172.5,113.2 194.0,113.2 C215.5,113.2 215.5,102.7 237.0,102.7 C258.5,102.7 258.5,93.3 280.0,93.3 C301.5,93.3 301.5,73.5 323.0,73.5 C344.5,73.5 344.5,59.5 366.0,59.5 C387.5,59.5 387.5,58.3 409.0,58.3 C430.5,58.3 430.5,66.5 452.0,66.5 C473.5,66.5 473.5,74.7 495.0,74.7 C516.5,74.7 516.5,85.2 538.0,85.2"/><circle class="fade dot" cx="22.0" cy="126.0" r="4.5"/><text class="fade tlabel" x="22.0" y="115.0" text-anchor="middle">9°</text><text class="fade emo" x="22.0" y="26" text-anchor="middle">☁️</text><text class="hlabel" x="22.0" y="206" text-anchor="middle">07</text><text class="hlabel" x="108.0" y="206" text-anchor="middle">09</text><circle class="fade dot" cx="151.0" cy="120.2" r="4.5"/><text class="fade tlabel" x="151.0" y="109.2" text-anchor="middle">9°</text><text class="fade emo" x="151.0" y="26" text-anchor="middle">🌧</text><text class="hlabel" x="194.0" y="206" text-anchor="middle">11</text><circle class="fade dot" cx="280.0" cy="93.3" r="4.5"/><text class="fade tlabel" x="280.0" y="82.3" text-anchor="middle">12°</text><text class="fade emo" x="280.0" y="26" text-anchor="middle">🌧</text><text class="hlabel" x="280.0" y="206" text-anchor="middle">13</text><text class="hlabel" x="366.0" y="206" text-anchor="middle">15</text><circle class="fade dot" cx="409.0" cy="58.3" r="4.5"/><text class="fade tlabel" x="409.0" y="47.3" text-anchor="middle">15°</text><text class="fade emo" x="409.0" y="26" text-anchor="middle">🌧</text><text class="hlabel" x="452.0" y="206" text-anchor="middle">17</text><circle class="fade dot" cx="538.0" cy="85.2" r="4.5"/><text class="fade tlabel" x="538.0" y="74.2" text-anchor="middle">12°</text><text class="fade emo" x="538.0" y="26" text-anchor="middle">🌧</text><text class="hlabel" x="538.0" y="206" text-anchor="middle">19</text></svg><p class="legend"><span><i class="lg line"></i>Temperature</span><span><i class="lg rain"></i>Rain chance</span><span class="pill">UV 2</span></p></section><section class="card r ok k-train" style="--d:2"><h2><span class="ic">🚆</span>If you leave at 07:30</h2><div class="trip rec"><div class="trow"><b>07:38</b><span class="dur">51 min</span><b>08:29</b></div><div class="bar"><i class="seg walk" style="flex:17;--k:0" title="walk 17 min"><em>🚶</em></i><i class="seg s" style="flex:9;--k:1" title="S6 9 min"><em>S6</em></i><i class="seg wait" style="flex:18;--k:2" title="wait 18 min"><em></em></i><i class="seg bus" style="flex:4;--k:3" title="BusFB-64 4 min"><em></em></i><i class="seg walk" style="flex:3;--k:4" title="walk 3 min"><em></em></i></div><div class="tmeta"><ul class="rides"><li><span class="chip s">S6</span> <b>07:55</b> <span class="muted">pl. 1</span> <span class="occ" title="1/4 full"><i class="on"></i><i class=""></i><i class=""></i><i class=""></i></span><span class="muted occl">quiet</span></li><li><span class="chip bus">BusFB-64</span> <b>08:22</b> <span class="muted">pl. A</span> <span class="occ" title="2/4 full"><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span><span class="muted occl">moderate</span></li></ul><div class="tright"><span class="badge good">Best pick</span><span class="st ok">on time</span></div></div></div><div class="trip"><div class="trow"><b>07:53</b><span class="dur">61 min</span><b>08:54</b></div><div class="bar"><i class="seg walk" style="flex:17;--k:0" title="walk 17 min"><em>🚶</em></i><i class="seg s" style="flex:12;--k:1" title="S6 12 min"><em>S6</em></i><i class="seg walk" style="flex:2;--k:2" title="walk 2 min"><em></em></i><i class="seg wait" style="flex:11;--k:3" title="wait 11 min"><em></em></i><i class="seg bus" style="flex:16;--k:4" title="BusFB-64 16 min"><em>BusFB-64</em></i><i class="seg walk" style="flex:3;--k:5" title="walk 3 min"><em></em></i></div><div class="tmeta"><ul class="rides"><li><span class="chip s">S6</span> <b>08:10</b> <span class="muted">pl. 1</span> <span class="occ" title="2/4 full"><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span><span class="muted occl">moderate</span></li><li><span class="chip bus">BusFB-64</span> <b>08:35</b> <span class="occ" title="1/4 full"><i class="on"></i><i class=""></i><i class=""></i><i class=""></i></span><span class="muted occl">quiet</span></li></ul><div class="tright"><span class="st ok">on time</span></div></div></div></section><section class="card r warn k-rainhome" style="--d:0"><h2><span class="ic">☂️</span>Way home</h2><p class="lead">Way home (15:00–18:00): light rain likely, 90% at 17:00 — take an umbrella</p><div class="rainbars"><div class="rb" style="--k:0"><i class="bar" style="--h:64%;--k:0"></i><b>64%</b><span>15h</span></div><div class="rb" style="--k:1"><i class="bar" style="--h:80%;--k:1"></i><b>80%</b><span>16h</span></div><div class="rb" style="--k:2"><i class="bar" style="--h:90%;--k:2"></i><b>90%</b><span>17h</span></div><div class="rb" style="--k:3"><i class="bar" style="--h:88%;--k:3"></i><b>88%</b><span>18h</span></div></div></section><section class="card r info k-radar" style="--d:1"><h2><span class="ic">📡</span>Rain radar</h2><div class="map" id="radar" data-lat="50.1" data-lon="8.7"><div class="shimmer"></div></div><p class="legend"><span class="muted">Live rain radar, past two hours · tap to play or pause</span></p></section><section class="card r info k-sky" style="--d:2"><h2><span class="ic">🌅</span>Sky</h2><div class="skygrid"><div><svg class="sunarc" viewBox="0 0 300 150" role="img" aria-label="Sunrise 08:00, sunset 18:18"><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--sun);stop-opacity:.22"/><stop offset="1" style="stop-color:var(--sun);stop-opacity:0"/></linearGradient></defs><path d="M38,122 A112,112 0 0 1 262,122 Z" fill="url(#sg)"/><path d="M38,122 A112,112 0 0 1 262,122" class="track"/><line x1="14" x2="286" y1="122" y2="122" class="axis"/><g class="fade sunpos" style="--t:0.500"><circle class="halo" cx="150.0" cy="10.0" r="15"/><circle cx="150.0" cy="10.0" r="8.5" class="sun"/></g><text x="38" y="140" text-anchor="middle" class="hlabel">08:00</text><text x="262" y="140" text-anchor="middle" class="hlabel">18:18</text></svg><p class="center"><b>10 h 18 min</b> of daylight</p><p class="muted">Days are getting shorter: -3 min tomorrow</p></div><div class="moonbox"><svg class="moon" viewBox="0 0 64 64" role="img"><circle cx="32" cy="32" r="26" class="dark"/><path d="M32,6 A26,26 0 0 1 32,58 A22.68,26 0 0 1 32,6 Z" class="lit"/><circle cx="32" cy="32" r="26" class="rim"/></svg><b>Waxing gibbous</b><span class="muted">94% lit<br>Full moon Sun 25 Oct</span></div></div><p class="pill warnpill">⏰ Clocks go back 1 hour early on Sun 25 Oct — an extra hour of sleep</p></section>
+<footer><p><a href="https://smarthipad-ai.github.io/commute/">Live commute page →</a></p><p>Photo: <a href="https://commons.wikimedia.org/wiki/File:Red_Dragon_scuplture_during_River_Lee_flooding,_October_2023.jpg">Jim Buckley’s Red Dragon sculpture from 1985 during River Lee flooding, October 2023</a> · Podstawko · CC BY-SA 4.0</p><p>Made 22:34 · RMV, Open-Meteo, DWD via Bright Sky, tagesschau, Wikimedia, pegelonline, ECB</p></footer>
+</main><script>
+(()=>{
+const rm=matchMedia('(prefers-reduced-motion: reduce)').matches, $=(s,r=document)=>[...r.querySelectorAll(s)];
+// reveal cards as they scroll in
+const io=new IntersectionObserver(es=>es.forEach(x=>{if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target)}}),{threshold:.12});
+$('.r').forEach(el=>io.observe(el));
+// count the temperatures up
+if(!rm)$('[data-count]').forEach(el=>{const to=+el.dataset.count,t0=performance.now();(function f(t){const p=Math.min(1,(t-t0)/1100),v=Math.round(to*(1-Math.pow(1-p,3)));el.textContent=v;if(p<1)requestAnimationFrame(f)})(t0)});
+// countdown to the recommended departure
+$('[data-leave]').forEach(el=>{const at=new Date(el.dataset.leave),out=$('.cd',el)[0];
+ const u=()=>{const m=Math.round((at-Date.now())/6e4);out.textContent=m>90?`in ${Math.floor(m/60)} h ${m%60} min`:m>0?`in ${m} min`:m>-6?'leave now':''};u();setInterval(u,15000)});
+// weather in the hero: rain, snow, sun glow, drifting cloud or fog
+const hero=$('.hero')[0],cv=$('canvas',hero)[0],kind=hero.dataset.fx;
+if(!rm&&cv&&kind!=='none'){const c=cv.getContext('2d');let W,H;const dpr=Math.min(devicePixelRatio||1,2);
+ const size=()=>{W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;c.setTransform(dpr,0,0,dpr,0,0)};size();addEventListener('resize',size);
+ const n={rain:120,snow:80,fog:5,cloud:6,sun:0}[kind]||0,R=Math.random;
+ const P=[...Array(n)].map(()=>({x:R()*W,y:R()*H,v:kind==='rain'?520+R()*380:20+R()*40,l:10+R()*16,r:1+R()*2.6,s:R()*6.28,a:.05+R()*.08}));
+ let last=0;(function tick(t){const dt=Math.min(.05,(t-last)/1000||.016);last=t;c.clearRect(0,0,W,H);
+  if(kind==='rain'){c.strokeStyle='rgba(205,225,255,.42)';c.lineWidth=1.2;c.beginPath();P.forEach(p=>{c.moveTo(p.x,p.y);c.lineTo(p.x-p.l*.12,p.y+p.l);p.y+=p.v*dt;p.x-=p.v*dt*.12;if(p.y>H){p.y=-30;p.x=R()*(W+60)}});c.stroke()}
+  else if(kind==='snow'){c.fillStyle='rgba(255,255,255,.8)';P.forEach(p=>{p.y+=p.v*dt;p.s+=dt;p.x+=Math.sin(p.s)*.4;if(p.y>H){p.y=-6;p.x=R()*W}c.beginPath();c.arc(p.x,p.y,p.r,0,6.28);c.fill()})}
+  else if(kind==='sun'){const g=c.createRadialGradient(W*.82,H*.12,0,W*.82,H*.12,H*.75),k=.85+.15*Math.sin(t/1800);g.addColorStop(0,`rgba(255,220,130,${.6*k})`);g.addColorStop(.35,`rgba(255,190,90,${.22*k})`);g.addColorStop(1,'rgba(255,190,90,0)');c.fillStyle=g;c.fillRect(0,0,W,H)}
+  else{P.forEach(p=>{p.x+=p.v*dt*(kind==='fog'?.6:1);if(p.x>W+260)p.x=-260;const w=kind==='fog'?420:240,g=c.createRadialGradient(p.x,p.y%(H*.8)+H*.1,0,p.x,p.y%(H*.8)+H*.1,w);g.addColorStop(0,`rgba(255,255,255,${p.a*(kind==='fog'?1.8:1)})`);g.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=g;c.fillRect(p.x-w,0,w*2,H)})}
+  requestAnimationFrame(tick)})(0)}
+// rain radar (RainViewer frames on a Leaflet map), built when the card scrolls into view
+const rd=$('#radar')[0];
+if(rd){const lo=new IntersectionObserver(es=>{if(es[0].isIntersecting){lo.disconnect();radar(rd)}},{rootMargin:'200px'});lo.observe(rd)}
+function radar(el){
+ const css=document.createElement('link');css.rel='stylesheet';css.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';document.head.appendChild(css);
+ const js=document.createElement('script');js.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+ js.onload=async()=>{try{
+  const meta=await (await fetch('https://api.rainviewer.com/public/weather-maps.json')).json(),fr=[...meta.radar.past,...(meta.radar.nowcast||[])],lat=+el.dataset.lat,lon=+el.dataset.lon;
+  el.innerHTML='';const map=L.map(el,{zoomControl:false,scrollWheelZoom:false,attributionControl:true}).setView([lat,lon],8);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:10,className:'basemap',attribution:'© OpenStreetMap · radar RainViewer'}).addTo(map);
+  const layers=fr.map(f=>L.tileLayer(meta.host+f.path+'/256/{z}/{x}/{y}/2/1_1.png',{opacity:0,maxNativeZoom:7,maxZoom:10,zIndex:5}).addTo(map));
+  const bar=document.createElement('div');bar.className='mapbar';bar.innerHTML='<button aria-label="Play or pause">❚❚</button><span class="tm"></span><div class="prog2"><i></i></div>';el.appendChild(bar);
+  L.DomEvent.disableClickPropagation(bar);const btn=bar.firstChild,tm=$('.tm',bar)[0],pr=$('i',bar)[0];let i=fr.length-1,play=!rm,timer;
+  const show=k=>{layers.forEach((l,j)=>l.setOpacity(j===k?.72:0));const t=new Date(fr[k].time*1e3);tm.textContent=t.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+(fr[k].time*1e3>Date.now()+3e5?' · forecast':'');pr.style.width=((k+1)/fr.length*100)+'%'};
+  const step=()=>{i=(i+1)%fr.length;show(i);timer=setTimeout(step,i===fr.length-1?1800:550)};
+  const set=p=>{play=p;btn.textContent=p?'❚❚':'▶';clearTimeout(timer);if(p)timer=setTimeout(step,300)};
+  btn.onclick=()=>set(!play);el.addEventListener('click',e=>{if(!bar.contains(e.target))set(!play)});show(i);set(play);
+ }catch(e){el.innerHTML='<p class="muted" style="padding:16px">Radar unavailable right now.</p>'}};
+ document.head.appendChild(js)}
+})();
+</script></body></html>
