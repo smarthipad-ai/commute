@@ -1,0 +1,17 @@
+name: tick
+# Started on time by an external timer (cron-job.org) at 06:15, 14:15 and 19:15 Berlin time, because GitHub's own
+# scheduler runs hours late. It just starts the other two workflows; each decides from the clock what, if anything, to do.
+on:
+  workflow_dispatch:
+permissions:
+  actions: write
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          gh workflow run brief.yml -R "$GITHUB_REPOSITORY" -f auto=true
+          gh workflow run commute.yml -R "$GITHUB_REPOSITORY" -f session=true
+        env:
+          GH_TOKEN: ${{ github.token }}

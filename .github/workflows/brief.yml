@@ -1,20 +1,18 @@
 name: brief
 on:
   schedule:
-    # Berlin is UTC+2 in summer, UTC+1 in winter. GitHub's scheduler is best-effort and often hours late, so there are several
-    # triggers; brief.py decides from the actual time and stands down if the ping was already sent.
-    - cron: "15 4 * * 1-5"    # morning brief: 06:15 / 05:15 Berlin, sent at 06:45
-    - cron: "45 4 * * 1-5"
-    - cron: "15 5 * * 1-5"
-    - cron: "45 5 * * 1-5"
-    - cron: "15 17 * * 0-4"   # evening heads-up: 19:15 / 18:15 Berlin, sent at 20:00
-    - cron: "45 17 * * 0-4"
-    - cron: "15 18 * * 0-4"
-    - cron: "45 18 * * 0-4"
+    # Fallback only: GitHub's scheduler has been starting these 4-5 hours late. The real trigger is the external timer,
+    # which calls tick.yml at 06:15, 14:15 and 19:15 Berlin time. brief.py decides from the actual time and skips duplicates.
+    - cron: "15 4 * * 1-5"
+    - cron: "15 17 * * 0-4"
   workflow_dispatch:
     inputs:
       evening:
-        description: "Send the evening heads-up instead"
+        description: "Send the evening heads-up now"
+        type: boolean
+        default: false
+      auto:
+        description: "Behave like a scheduled run (used by the timer): wait for 06:45/20:00, skip if already sent"
         type: boolean
         default: false
 permissions:
@@ -46,4 +44,4 @@ jobs:
           FX: ${{ vars.FX || 'INR' }}
           PAGE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
           GH_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
-          FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && !inputs.auto }}

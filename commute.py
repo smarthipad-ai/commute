@@ -351,7 +351,7 @@ def session():
     if n.weekday() > 4:
         return None
     for back, (f, t) in ((False, AM), (True, PM)):
-        if hm(n.date(), f) - timedelta(minutes=45) <= n <= hm(n.date(), t):
+        if hm(n.date(), f) - timedelta(minutes=60) <= n <= hm(n.date(), t):
             return back, f, t
 
 

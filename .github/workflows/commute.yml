@@ -1,16 +1,10 @@
 name: commute
 on:
   schedule:
-    # Berlin is UTC+2 in summer, UTC+1 in winter. GitHub's scheduler is best-effort and often hours late, so there are several
-    # triggers; commute.py decides from the actual time and an extra run simply finds no session to cover.
-    - cron: "20 4 * * 1-5"    # morning session 07:00-09:00 (starts ~06:20 Berlin)
-    - cron: "50 4 * * 1-5"
-    - cron: "20 5 * * 1-5"
-    - cron: "50 5 * * 1-5"
-    - cron: "20 12 * * 1-5"   # afternoon session 15:00-17:30 (starts ~14:20 Berlin)
-    - cron: "50 12 * * 1-5"
-    - cron: "20 13 * * 1-5"
-    - cron: "50 13 * * 1-5"
+    # Fallback only: GitHub's scheduler has been starting these 4-5 hours late. The real trigger is the external timer,
+    # which calls tick.yml; commute.py decides from the actual time and a run outside a session just exits.
+    - cron: "20 4 * * 1-5"
+    - cron: "20 12 * * 1-5"
   workflow_dispatch:
     inputs:
       session:

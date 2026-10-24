@@ -680,7 +680,13 @@ def main():
     m = "evening" if "--evening" in a else mode() if not force else "morning"
     today = now().date()
     if not force and m is None:
-        print("not this run", now()); return
+        n = now()
+        if (today.weekday() < 5 and not holiday(today) and hm(today, LATEST) < n < hm(today, "14:00")
+                and not sent_today(f"brief-{today}") and not sent_today(f"late-{today}")):
+            send("Morning brief skipped", f"This run only started at {T(n)}, too late for the 06:45 brief. "
+                 "GitHub started it late and the external timer didn't start it on time; check cron-job.org.",
+                 "warning", priority=2, marker=f"late-{today}")
+        print("not this run", n); return
     if m == "evening":
         d = next_workday(today)
         if not force and d != today + timedelta(1):  # weekend or holiday tomorrow
