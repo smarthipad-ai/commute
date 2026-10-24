@@ -375,7 +375,7 @@ def notify(s, new=()):
         msg |= {"click": url, "actions": [{"action": "view", "label": "Details", "url": url}]}
     print(title, *lines, sep="\n")
     if E("NTFY_TOPIC"):
-        get("https://ntfy.sh", data=json.dumps(msg).encode(), method="POST", headers={"Content-Type": "application/json"})
+        get("https://ntfy.sh", tries=5, data=json.dumps(msg).encode(), method="POST", headers={"Content-Type": "application/json"})
 
 
 def go_ping(s, go):
@@ -389,7 +389,7 @@ def go_ping(s, go):
         msg["click"] = f"{E('PAGE_URL')}?v={now():%Y%m%d%H%M}"
     print(msg["title"], *lines, sep="\n")
     if E("NTFY_TOPIC"):
-        get("https://ntfy.sh", data=json.dumps(msg).encode(), method="POST", headers={"Content-Type": "application/json"})
+        get("https://ntfy.sh", tries=5, data=json.dumps(msg).encode(), method="POST", headers={"Content-Type": "application/json"})
 
 
 def sig(s):

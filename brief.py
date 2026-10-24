@@ -625,7 +625,7 @@ def send(title, body, tag="sunrise", pic=None, priority=3, marker=None, log=None
            "actions": [{"action": "view", "label": "Open brief", "url": url}]}
     if pic:
         msg["attach"] = pic["thumb"]
-    get("https://ntfy.sh", data=json.dumps(msg).encode(), method="POST", headers={"Content-Type": "application/json"})
+    get("https://ntfy.sh", tries=5, data=json.dumps(msg).encode(), method="POST", headers={"Content-Type": "application/json"})
 
 
 def mode():
