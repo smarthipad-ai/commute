@@ -7,7 +7,7 @@ permissions:
   actions: write
 jobs:
   start:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: ubuntu-latest is moving to 26.04
     timeout-minutes: 5
     steps:
       - run: |

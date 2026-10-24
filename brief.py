@@ -13,13 +13,12 @@ import json, math, re, sys, time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from functools import cache
-from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 import commute as c
 from brief_data import BINS, QUOTES, WORDS
-from brief_ui import icon, page
+from brief_ui import app_files, icon, page
 from commute import E, PM, T, TZ, get, hapi, holiday, hm, lookup, mins, now, place, trips
 
 SEND, LEAVE, LATEST, EVENING = E("BRIEF_AT", "06:45"), E("BRIEF_LEAVE", "07:30"), "09:00", E("EVENING_AT", "20:00")
@@ -44,20 +43,11 @@ class Sec:
     kind: str = "text"  # picks the renderer in brief_ui
     data: dict = None  # structured values for that renderer
     ping: list = None  # notification lines; None = use lines, [] = leave out
-
-
-def retry(f, tries=4):
-    for n in range(tries):
-        try:
-            return f()
-        except (HTTPError, URLError, TimeoutError):
-            if n == tries - 1:
-                raise
-            time.sleep(5 * 2 ** n)
+    private: bool = False  # personal (calendar, reminders, bins): notification only, never the public page or the public log
 
 
 def fetch(url, **headers):
-    return json.loads(retry(lambda: get(url, headers={**UA, **headers})))
+    return json.loads(get(url, headers={**UA, **headers}))
 
 
 def dt(s):
@@ -77,22 +67,33 @@ def home_coords():
     return round(la, 3), round(lo, 3)
 
 
+def local_times(d):
+    # Open-Meteo applies one UTC offset to the whole response, so after a clock change its times are an hour off; re-anchor them
+    off = timedelta(seconds=d.get("utc_offset_seconds", 0))
+    fix = lambda x: (datetime.fromisoformat(x) - off).replace(tzinfo=ZoneInfo("UTC")).astimezone(TZ).strftime("%Y-%m-%dT%H:%M")
+    for part, keys in (("hourly", ("time",)), ("daily", ("sunrise", "sunset"))):
+        for k in keys:
+            if k in d.get(part, {}):
+                d[part][k] = [fix(x) for x in d[part][k]]
+    return d
+
+
 @cache
 def forecast():
     la, lo = home_coords()
-    return fetch(f"https://api.open-meteo.com/v1/forecast?latitude={la}&longitude={lo}"
+    return local_times(fetch(f"https://api.open-meteo.com/v1/forecast?latitude={la}&longitude={lo}"
                  "&current=temperature_2m,apparent_temperature,weather_code"
                  "&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m"
                  "&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset"
-                 "&timezone=Europe%2FBerlin&forecast_days=4")
+                 "&timezone=Europe%2FBerlin&forecast_days=4"))
 
 
 @cache
 def air():
     la, lo = home_coords()
-    return fetch(f"https://air-quality-api.open-meteo.com/v1/air-quality?latitude={la}&longitude={lo}"
-                 "&hourly=european_aqi,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,ragweed_pollen"
-                 "&timezone=Europe%2FBerlin&forecast_days=3")
+    return local_times(fetch(f"https://air-quality-api.open-meteo.com/v1/air-quality?latitude={la}&longitude={lo}"
+                             "&hourly=european_aqi,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,ragweed_pollen"
+                             "&timezone=Europe%2FBerlin&forecast_days=3"))
 
 
 def hourly(src, d, frm, to, *keys):
@@ -132,7 +133,7 @@ def ics(name, d):
     if not url:
         return None
     import icalendar, recurring_ical_events
-    cal = icalendar.Calendar.from_ical(retry(lambda: get(url, headers=UA)))
+    cal = icalendar.Calendar.from_ical(get(url, headers=UA))
     out = []
     for ev in recurring_ical_events.of(cal).at(d):
         s, e = ev["DTSTART"].dt, ev.get("DTEND", ev["DTSTART"]).dt
@@ -179,8 +180,8 @@ def reminders(d, evening=False):
                     out.append(("⏳", f"{n} day{'s' * (n != 1)} until {text}", "countdown"))
             elif re.fullmatch(r"\d{4}-\d{2}-\d{2}", key) and date.fromisoformat(key) == d:
                 out.append(("📌", text, "once"))
-        except ValueError:  # e.g. 2026-02-30; skip just this line
-            print("bad reminder line:", raw)
+        except ValueError:  # e.g. 2026-02-30; skip just this line (the log is public, so don't print it)
+            print("skipped a reminder line with an impossible date")
     return out
 
 
@@ -435,14 +436,15 @@ def calendar(d, evening):
     allday = [e[2] for e in evs if e[3]]
     lines = [f"All day: {x}" for x in allday] + [f"{T(s)}–{T(e)} {t}" for s, e, t, _ in timed[:5]]
     if not lines:
-        return Sec("📅", "Calendar", ["Nothing in your calendar"], tone="ok")
+        return Sec("📅", "Calendar", ["Nothing in your calendar"], tone="ok", private=True)
     _, rec = morning_trips(d)
     warn = None
-    if timed and rec and timed[0][0] < rec["arr"] + timedelta(minutes=10):
-        warn = f"First meeting {T(timed[0][0])} — leaving at {T(leave_from(d))} you'd arrive {T(rec['arr'])}"
+    first = next((x for x in timed if x[0] >= hm(d, "06:00")), None)  # ignore late-night leftovers and early reminders
+    if first and rec and first[0] < rec["arr"] + timedelta(minutes=10):
+        warn = f"First meeting {T(first[0])} — leaving at {T(leave_from(d))} you'd arrive {T(rec['arr'])}"
         lines.insert(0, f"⚠ {warn}")
     return Sec("📅", "Calendar", lines, f"📅 {T(timed[0][0])}" if timed else None, "warn" if warn else "info", "calendar",
-               dict(allday=allday, events=[(T(s), T(e), t) for s, e, t, _ in timed[:6]], warn=warn))
+               dict(allday=allday, events=[(T(s), T(e), t) for s, e, t, _ in timed[:6]], warn=warn), private=True)
 
 
 def bins(d, evening):
@@ -453,7 +455,7 @@ def bins(d, evening):
     names = [next((v for k, v in BINS.items() if k in t.lower()), (t, "#777")) for _, _, t, _ in evs]
     text = ", ".join(n for n, _ in names)
     return Sec("🗑", "Bins", [f"Put out tonight: {text}" if evening else f"Collected today: {text}"], f"🗑 {text}",
-               "warn" if evening else "info", "bins", dict(names=names, evening=evening))
+               "warn" if evening else "info", "bins", dict(names=names, evening=evening), private=True)
 
 
 def notes(d, evening):
@@ -463,7 +465,7 @@ def notes(d, evening):
     # only one-offs, bills and birthdays make the evening heads-up worth sending; weekly routines just ride along
     tone = "warn" if evening and any(k != "weekly" for _, _, k in r) else "info"
     return Sec("📌", "Tomorrow" if evening else "Today", [f"{i} {t}" for i, t, _ in r], tone=tone, kind="notes",
-               data=dict(items=[(i, t) for i, t, _ in r])) if r else None
+               data=dict(items=[(i, t) for i, t, _ in r]), private=True) if r else None
 
 
 def news(d, evening):
@@ -577,9 +579,9 @@ def next_workday(d):
     return d
 
 
-def build(d, evening=False):
+def build(d, evening=False, sections=None):
     secs = []
-    for f in SECTIONS:
+    for f in sections or SECTIONS:
         try:
             s = f(d, evening)
         except Exception as e:  # one broken source shouldn't sink the whole brief
@@ -590,7 +592,9 @@ def build(d, evening=False):
     return secs
 
 
-def message(secs, d, evening):
+def message(secs, d, evening, public=False):
+    # public=True leaves out the private sections (for the log)
+    secs = [s for s in secs if not (public and s.private)]
     heads = [s.head for s in secs if s.head]
     title = ("Tomorrow: " if evening else "") + (" · ".join(heads) or "Morning brief")
     body = []
@@ -608,16 +612,20 @@ def message(secs, d, evening):
     return title, "\n".join(body)
 
 
-def send(title, body, tag="sunrise", pic=None, priority=3, marker=None):
-    print(title, body, sep="\n")
+def send(title, body, tag="sunrise", pic=None, priority=3, marker=None, log=None):
+    # Actions logs are public: print only what's also on the public page (log), never the personal sections
+    print(log if log is not None else f"{title}\n{body}")
     if not E("NTFY_TOPIC"):
         return
-    url = (E("PAGE_URL") or "") + "brief/"
+    raw = body.encode()
+    if len(raw) > 3900:  # ntfy turns messages over 4096 bytes into a file attachment
+        body = raw[:3800].decode("utf-8", "ignore").rsplit("\n", 1)[0] + "\n… more on the brief page"
+    url = (E("PAGE_URL") or "") + f"brief/?v={now():%Y%m%d%H%M}"  # a new URL each time, so the phone can't show a cached copy
     msg = {"topic": E("NTFY_TOPIC"), "title": title, "message": body, "tags": [tag] + ([marker] if marker else []), "priority": priority, "click": url,
            "actions": [{"action": "view", "label": "Open brief", "url": url}]}
     if pic:
         msg["attach"] = pic["thumb"]
-    retry(lambda: get("https://ntfy.sh", data=json.dumps(msg).encode(), method="POST", headers={"Content-Type": "application/json"}))
+    get("https://ntfy.sh", data=json.dumps(msg).encode(), method="POST", headers={"Content-Type": "application/json"})
 
 
 def mode():
@@ -626,7 +634,7 @@ def mode():
     n = now()
     if n.weekday() < 5 and hm(n.date(), "05:00") <= n <= hm(n.date(), LATEST):
         return "morning"
-    if n.weekday() in (6, 0, 1, 2, 3) and hm(n.date(), "18:00") <= n <= hm(n.date(), "23:00"):
+    if hm(n.date(), "18:00") <= n <= hm(n.date(), "23:00"):  # every day: before a weekend it only covers bins and reminders
         return "evening"
 
 
@@ -636,7 +644,7 @@ def sent_today(marker):
     if not topic:
         return False
     try:
-        raw = retry(lambda: get(f"https://ntfy.sh/{topic}/json?poll=1&since=14h")).decode()
+        raw = get(f"https://ntfy.sh/{topic}/json?poll=1&since=14h").decode()
         return any(marker in (json.loads(x).get("tags") or []) for x in raw.splitlines() if x.strip())
     except Exception as e:  # better a rare duplicate than a missing brief
         print("duplicate check failed:", e)
@@ -660,18 +668,20 @@ def follow_up(d):
             send("⚠️ " + ", ".join(f"{n} {T(t)} {w}" for n, t, w in sorted(new, key=lambda i: i[1])), "\n".join(s.lines), "warning", priority=4)
 
 
-def run(d, evening, wait_until=None):
-    secs = build(d, evening)
+def run(d, evening, wait_until=None, sections=None, publish=True):
+    secs = build(d, evening, sections)
     title, body = message(secs, d, evening)
+    log = "\n".join(message(secs, d, evening, public=True))
     try:
-        ctx = dict(pic=picture(now().date()), quote=quote_of(d), leave=LEAVE, page_url=E("PAGE_URL") or "../", made=T(now()),
-                   name=E("NAME", "Smarth"), today=now().date(), now=now())
-        c.publish(page(secs, d, evening, ctx), "brief/index.html")
+        if publish:
+            ctx = dict(pic=picture(now().date()), quote=quote_of(d), leave=LEAVE, page_url=E("PAGE_URL") or "../", made=T(now()),
+                       name=E("NAME", "Smarth"), today=now().date(), now=now())
+            c.publish(page(secs, d, evening, ctx), "brief/index.html", extra=app_files())
     except Exception as e:  # the ping matters more than the page
         print("page publish failed:", type(e).__name__, e)
     if wait_until:
         time.sleep(max(0, (wait_until - now()).total_seconds()))
-    return secs, title, body
+    return secs, title, body, log
 
 
 def main():
@@ -688,15 +698,16 @@ def main():
                  "warning", priority=2, marker=f"late-{today}")
         print("not this run", n); return
     if m == "evening":
-        d = next_workday(today)
-        if not force and d != today + timedelta(1):  # weekend or holiday tomorrow
-            print("no workday tomorrow"); return
+        d, off = next_workday(today), None
+        if not force and d != today + timedelta(1):
+            # tomorrow is a weekend day or holiday: no commute, but bins, birthdays and warnings still matter tonight
+            d, off = today + timedelta(1), [dwd_warnings, bins, notes]
         if not force and sent_today(f"evening-{d}"):
             print("already sent"); return
-        secs, title, body = run(d, True, None if force else hm(today, EVENING))
+        secs, title, body, log = run(d, True, None if force else hm(today, EVENING), off, publish=not off)
         # stay quiet unless something needs doing tonight or tomorrow early; Sunday always gets a preview of the week
-        if force or today.weekday() == 6 or any(s.tone in ("warn", "bad") and s.title != "Way home" for s in secs):
-            send(title, body, "crescent_moon", marker=f"evening-{d}")
+        if force or (today.weekday() == 6 and not off) or any(s.tone in ("warn", "bad") and s.title != "Way home" for s in secs):
+            send(title, body, "crescent_moon", marker=f"evening-{d}", log=log)
         else:
             print("nothing worth a ping tonight")
         return
@@ -710,8 +721,8 @@ def main():
         time.sleep(max(0, (hm(today, SEND) - now()).total_seconds() - 90))  # fetch shortly before 06:45
     # a morning brief is for today until 09:00, even if this run started after the 07:30 departure
     d = today if (now() <= hm(today, LATEST) and today.weekday() < 5 and not holiday(today)) else next_workday(today)
-    secs, title, body = run(d, False, None if force else hm(today, SEND))
-    send(title, body, pic=picture(today), marker=f"brief-{d}" if d == today else None)
+    secs, title, body, log = run(d, False, None if force else hm(today, SEND))
+    send(title, body, pic=picture(today), marker=f"brief-{d}" if d == today else None, log=log)
     if not force and d == today:
         follow_up(d)
 

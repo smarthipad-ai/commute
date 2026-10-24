@@ -49,7 +49,7 @@ WORDS = [
     ("das", "Fernweh", "noun", "longing for faraway places", "Im Herbst überkommt mich oft das Fernweh.", "In autumn I'm often struck by wanderlust."),
     ("der", "Bahnhof", "noun", "train station", "Wir treffen uns am Bahnhof.", "We'll meet at the station."),
     ("das", "Gleis", "noun", "platform; track", "Der Zug fährt auf Gleis 1 ein.", "The train arrives at platform 1."),
-    ("", "umsteigen", "verb", "to change (trains)", "Wir müssen in Bad Vilbel umsteigen.", "We have to change at Bad Vilbel."),
+    ("", "umsteigen", "verb", "to change (trains)", "Wir müssen an der Hauptwache umsteigen.", "We have to change at Hauptwache."),
     ("der", "Berufsverkehr", "noun", "rush-hour traffic", "Im Berufsverkehr ist die S-Bahn voll.", "In rush hour the S-Bahn is full."),
     ("", "pünktlich", "adjective", "punctual, on time", "Sei bitte pünktlich!", "Please be on time!"),
     ("", "gemütlich", "adjective", "cosy, comfortable", "Das Café ist richtig gemütlich.", "The café is really cosy."),

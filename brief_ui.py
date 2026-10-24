@@ -284,11 +284,47 @@ SLIM = {"text"}
 
 
 def card(s, i, ctx):
+    if s.private:  # this page is public: personal sections stay in the notification
+        n = len(s.lines)
+        body = f'<p class="muted">🔒 {n} item{"s" * (n != 1)} — shown in your notification only, kept off this public page</p>'
+        return f'<section class="card r slim private" style="--d:{i % 3}"><span class="ic">{s.icon}</span><div><h2>{e(s.title)}</h2>{body}</div></section>'
     body = RENDER.get(s.kind, r_text)(s, ctx)
     cls = f"card r {s.tone} k-{s.kind}"
     if s.kind in SLIM:
         return f'<section class="{cls} slim" style="--d:{i % 3}"><span class="ic">{s.icon}</span><div><h2>{e(s.title)}</h2>{body}</div></section>'
     return f'<section class="{cls}" style="--d:{i % 3}"><h2><span class="ic">{s.icon}</span>{e(s.title)}</h2>{body}</section>'
+
+
+# --- home-screen app ---------------------------------------------------------
+
+def png_icon(size):
+    # a sunrise: night-to-dawn gradient with a sun on the horizon, drawn pixel by pixel (no image library needed)
+    import struct, zlib
+    rows = []
+    for y in range(size):
+        t = y / (size - 1)
+        sky = [round(a + (b - a) * t) for a, b in zip((22, 34, 66), (245, 158, 96))]
+        row = bytearray([0])
+        for x in range(size):
+            dx, dy = (x - size / 2) / size, (y - size * .72) / size
+            r = (dx * dx + dy * dy) ** .5
+            px = (255, 214, 120) if r < .19 and y < size * .78 else (250, 190, 100) if r < .25 and y < size * .78 else tuple(sky)
+            if y >= size * .78:  # the ground
+                px = (27, 36, 51)
+            row += bytes(px)
+        rows.append(bytes(row))
+    chunk = lambda k, d: struct.pack(">I", len(d)) + k + d + struct.pack(">I", zlib.crc32(k + d))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"".join(rows), 9)) + chunk(b"IEND", b""))
+
+
+def app_files():
+    # lets you add the brief to your phone's home screen; it then opens full screen like an app
+    import json
+    manifest = dict(name="Morning brief", short_name="Brief", start_url="./", scope="./", display="standalone",
+                    background_color="#1b2433", theme_color="#1b2433",
+                    icons=[dict(src=f"icon-{n}.png", sizes=f"{n}x{n}", type="image/png", purpose="any maskable") for n in (192, 512)])
+    return {"brief/manifest.webmanifest": json.dumps(manifest), "brief/icon-192.png": png_icon(192), "brief/icon-512.png": png_icon(512)}
 
 
 # --- page -------------------------------------------------------------------
@@ -332,6 +368,8 @@ def page(secs, d, evening, ctx):
 TEMPLATE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#1b2433"><title>__TITLE__</title>
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" type="image/png" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Brief">
 <script>document.documentElement.classList.add('js')</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -421,7 +459,7 @@ main{max-width:640px;margin:-34px auto 0;padding:0 14px 44px;position:relative}
 .trip.rec .trow b{color:var(--ok)}.dur{flex:1;text-align:center;color:var(--mute);font-size:12px;position:relative}
 .dur:before,.dur:after{content:"";position:absolute;top:50%;width:calc(50% - 30px);border-top:1.5px dashed var(--line)}.dur:before{left:0}.dur:after{right:0}
 .bar{display:flex;gap:3px;height:34px}.seg{display:grid;place-items:center;border-radius:11px;color:#fff;font:700 12px Inter;min-width:5px;background:var(--rail);transform-origin:left;overflow:hidden;white-space:nowrap}
-.seg em{font-style:normal}.seg.s{background:var(--s)}.seg.u{background:var(--u)}.seg.bus{background:var(--bus)}.seg.tram{background:var(--tram)}
+.seg em{font-style:normal}.seg.demand{background:#0f766e}.chip.demand{background:#0f766e}.seg.s{background:var(--s)}.seg.u{background:var(--u)}.seg.bus{background:var(--bus)}.seg.tram{background:var(--tram)}
 .seg.walk{background:repeating-linear-gradient(90deg,var(--line) 0 5px,transparent 5px 10px);color:var(--mute)}.seg.wait{background:var(--soft)}
 .tmeta{display:flex;justify-content:space-between;gap:10px;margin-top:9px;align-items:flex-start}.rides{list-style:none;margin:0;padding:0;display:grid;gap:5px;font-size:13.5px}
 .rides li{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.chip{display:inline-block;color:#fff;font-weight:700;font-size:12px;padding:2px 8px;border-radius:6px;background:var(--rail)}
