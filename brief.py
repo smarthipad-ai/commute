@@ -35,11 +35,11 @@ OCC = {11: "quiet", 12: "moderate", 13: "busy", 14: "packed"}
 SYNODIC = 29.530588853
 NEWS = [("World", [("BBC", "https://feeds.bbci.co.uk/news/world/rss.xml", 3)]),  # English RSS: (group, [(source, feed, how many)])
         ("Europe", [("Guardian", "https://www.theguardian.com/world/europe-news/rss", 3)]),
-        ("India", [("Indian Express", "https://indianexpress.com/section/india/feed/", 3)]),
+        ("India", [("Hindustan Times", "https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml", 3)]),  # Indian Express 403s GitHub's runners
         ("Finance", [("CNBC", "https://www.cnbc.com/id/100727362/device/rss/rss.html", 2), ("Mint", "https://www.livemint.com/rss/markets", 2)])]
-# news summary from Gemini's free tier; the second model is the fallback if the first is busy or retired
+# news summary from Gemini's free tier: Flash-Lite answers in seconds; Flash, the fallback, can take over 30 s
 GEMINI = "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent"
-GEMINI_MODELS = [E("GEMINI_MODEL") or "gemini-3.8-flash", "gemini-3.5-flash-lite"]
+GEMINI_MODELS = [E("GEMINI_MODEL") or "gemini-3.5-flash-lite", "gemini-3.8-flash"]
 SUMMARY_PROMPT = ("You write the news paragraph of a personal morning brief for someone in Frankfurt who follows world, European, "
                   "Indian and financial news. From the headlines below, write 3-4 plain sentences in English, under 90 words, on what "
                   "matters most today, leading with the biggest story. Use only facts stated in the headlines and descriptions; don't "
@@ -566,7 +566,7 @@ def news(d, evening):
         return None
     gist = summary(groups)
     return Sec("📰", "News", ([gist] if gist else []) + [x["title"] for _, g in groups for x in g], kind="news",
-               data=dict(groups=groups, summary=gist, src="BBC · Guardian · Indian Express · CNBC · Mint" + (" · summary by Gemini" if gist else "")),
+               data=dict(groups=groups, summary=gist, src="BBC · Guardian · Hindustan Times · CNBC · Mint" + (" · summary by Gemini" if gist else "")),
                ping=[gist] if gist else [g[0]["title"] for _, g in groups])
 
 
@@ -579,7 +579,7 @@ def summary(groups):
     body = json.dumps({"systemInstruction": {"parts": [{"text": SUMMARY_PROMPT}]}, "contents": [{"parts": [{"text": text}]}]}).encode()
     for m in dict.fromkeys(GEMINI_MODELS):
         try:  # key in a header, never the URL, so it can't end up in an error message or the public log
-            r = json.loads(get(GEMINI.format(m), data=body, method="POST",
+            r = json.loads(get(GEMINI.format(m), tries=2, timeout=90, data=body, method="POST",
                                headers={**UA, "Content-Type": "application/json", "x-goog-api-key": key}))
             out = clean(" ".join(p.get("text", "") for p in r["candidates"][0]["content"]["parts"] if not p.get("thought")), 700)
             if out:

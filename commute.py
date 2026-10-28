@@ -47,11 +47,11 @@ def holiday(d):
     return days.get(d)
 
 
-def get(url, tries=3, **kw):
+def get(url, tries=3, timeout=30, **kw):
     # every outside call goes through here: retry dropped connections, timeouts and server errors, not client errors like 404
     for n in range(tries):
         try:
-            with urlopen(Request(url, **kw), timeout=30) as r:
+            with urlopen(Request(url, **kw), timeout=timeout) as r:
                 return r.read()
         except HTTPError as e:
             if (e.code < 500 and e.code != 429) or n == tries - 1:

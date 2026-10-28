@@ -379,7 +379,7 @@ TEMPLATE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <div class="hi"><h1 class="fu" style="--d:1">__GREET__</h1><div class="chips">__CHIPS__</div>__QUOTE__</div>
 <svg class="cue" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></header>
 <main>__CARDS__
-<footer><p><a href="__LIVE__">Live commute page →</a></p>__CREDIT__<p>Made __MADE__ · RMV, Open-Meteo, DWD via Bright Sky, BBC, Guardian, Indian Express, CNBC, Mint, Google News, Google Calendar, Gemini, Wikimedia, pegelonline, ECB</p></footer>
+<footer><p><a href="__LIVE__">Live commute page →</a></p>__CREDIT__<p>Made __MADE__ · RMV, Open-Meteo, DWD via Bright Sky, BBC, Guardian, Hindustan Times, CNBC, Mint, Google News, Google Calendar, Gemini, Wikimedia, pegelonline, ECB</p></footer>
 </main><script>__JS__</script></body></html>"""
 
 CSS = """
