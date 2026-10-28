@@ -53,8 +53,10 @@ Workflow inputs: `brief.yml` `evening` (send heads-up now) and `auto` (behave li
 
 Required secrets: `RMV_KEY`, `NTFY_TOPIC`, `HOME_ADDR`, `WORK_ADDR`.
 Optional secrets: `REMINDERS` (format in `brief.reminders()` docstring), `GCAL_ICS` (Google Calendar secret iCal URL),
-`FES_ICS` (FrankfurtPlus bin calendar iCal), `WATCHLIST` (`SYMBOL:Label, …`, Yahoo Finance symbols).
-Optional repo variables: `FX` (default `INR`), `WORK_LEAVE` (e.g. `17:00`).
+`FES_ICS` (FrankfurtPlus bin calendar iCal), `WATCHLIST` (`SYMBOL:Label, …`, Yahoo Finance symbols),
+`GEMINI_API_KEY` (free-tier Google AI Studio key for the news summary; without it the News card shows headlines only).
+Optional repo variables: `FX` (default `INR`), `WORK_LEAVE` (e.g. `17:00`), `GEMINI_MODEL` (default `gemini-3.8-flash`,
+falls back to `gemini-3.5-flash-lite`).
 The user keeps reminders in a git-ignored local `reminders.txt` and uploads it with `gh secret set REMINDERS < reminders.txt`.
 
 ## Rules to keep

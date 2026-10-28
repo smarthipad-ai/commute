@@ -230,9 +230,9 @@ def r_news(s, ctx):
             return ""
         lis = "".join(f'<li><a href="{link(x["url"])}" target="_blank" rel="noopener"><span class="nt">{e(x["title"])}</span>'
                       f'<span class="muted">{e(x["topline"] + " · " if x["topline"] else "")}{ago(x["time"], ctx["now"]) if x["time"] else ""}</span></a></li>' for x in items)
-        return f'<h3>{title}</h3><ul class="news">{lis}</ul>'
-    d = s.data
-    return group("Germany", d["national"]) + group("Hessen", d["hessen"]) + '<p class="src">tagesschau.de · hessenschau.de</p>'
+        return (f'<h3>{title}</h3>' if title else "") + f'<ul class="news">{lis}</ul>'
+    gist = f'<p class="lead">{e(s.data["summary"])}</p>' if s.data.get("summary") else ""
+    return gist + "".join(group(t, g) for t, g in s.data["groups"]) + f'<p class="src">{e(s.data["src"])}</p>'
 
 
 def r_history(s, ctx):
@@ -277,9 +277,9 @@ def r_ticker(s, ctx):
 
 
 RENDER = {"alert": r_alert, "weather": r_weather, "sky": r_sky, "train": r_train, "rainhome": r_rainhome, "radar": r_radar,
-          "calendar": r_calendar, "bins": r_bins, "notes": r_notes, "news": r_news, "history": r_history, "article": r_article,
+          "calendar": r_calendar, "bins": r_bins, "notes": r_notes, "news": r_news, "strikes": r_news, "history": r_history, "article": r_article,
           "word": r_word, "river": r_river, "ticker": r_ticker}
-ORDER = ["alert", "weather", "train", "rainhome", "radar", "sky", "text", "calendar", "bins", "notes", "news", "history", "article", "word", "river", "ticker"]
+ORDER = ["alert", "strikes", "weather", "train", "rainhome", "radar", "sky", "text", "calendar", "bins", "notes", "news", "history", "article", "word", "river", "ticker"]
 SLIM = {"text"}
 
 
@@ -379,7 +379,7 @@ TEMPLATE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <div class="hi"><h1 class="fu" style="--d:1">__GREET__</h1><div class="chips">__CHIPS__</div>__QUOTE__</div>
 <svg class="cue" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></header>
 <main>__CARDS__
-<footer><p><a href="__LIVE__">Live commute page →</a></p>__CREDIT__<p>Made __MADE__ · RMV, Open-Meteo, DWD via Bright Sky, tagesschau, Wikimedia, pegelonline, ECB</p></footer>
+<footer><p><a href="__LIVE__">Live commute page →</a></p>__CREDIT__<p>Made __MADE__ · RMV, Open-Meteo, DWD via Bright Sky, BBC, Guardian, Indian Express, CNBC, Mint, Google News, Google Calendar, Gemini, Wikimedia, pegelonline, ECB</p></footer>
 </main><script>__JS__</script></body></html>"""
 
 CSS = """
