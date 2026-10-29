@@ -4,7 +4,7 @@ from functools import cache
 from html import escape
 from http.client import HTTPException
 from urllib.error import HTTPError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
@@ -47,8 +47,14 @@ def holiday(d):
     return days.get(d)
 
 
+DOWN = {}  # host -> when it last failed every try; skipped for 10 min, so one dead server costs ~2 min, not 2 min per call
+
+
 def get(url, tries=3, timeout=30, **kw):
     # every outside call goes through here: retry dropped connections, timeouts and server errors, not client errors like 404
+    host = urlsplit(url).hostname
+    if time.time() - DOWN.get(host, 0) < 600:
+        raise ConnectionError(f"{host} unreachable a moment ago, skipped")
     for n in range(tries):
         try:
             with urlopen(Request(url, **kw), timeout=timeout) as r:
@@ -58,6 +64,7 @@ def get(url, tries=3, timeout=30, **kw):
                 raise
         except (OSError, HTTPException):  # URLError, timeouts, connection resets
             if n == tries - 1:
+                DOWN[host] = time.time()
                 raise
         time.sleep(3 * 3 ** n)
 

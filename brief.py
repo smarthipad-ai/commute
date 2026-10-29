@@ -85,8 +85,12 @@ def home_coords():
     try:
         la, lo = (float(x) for x in v.split(","))
     except ValueError:
-        x = lookup(v)[0]
-        la, lo = x["lat"], x["lon"]
+        try:
+            x = lookup(v)[0]
+            la, lo = x["lat"], x["lon"]
+        except Exception as e:  # RMV down: city-centre weather beats none
+            print("home lookup failed, using central Frankfurt:", type(e).__name__, e)
+            la, lo = 50.111, 8.682
     return round(la, 3), round(lo, 3)
 
 
@@ -698,7 +702,11 @@ def message(secs, d, evening, public=False):
     body = []
     if d != now().date() + timedelta(1 if evening else 0):
         body.append(f"(for {d:%a %d %b})")
+    if down := [s.title for s in secs if s.icon == "❔"]:  # one line for every source that failed, not one each
+        body.append(f"❔ Couldn't load: {', '.join(down)}")
     for s in sorted(secs, key=lambda s: TONE_ORDER[s.tone]):
+        if s.icon == "❔":
+            continue
         lines = s.lines if s.ping is None else s.ping
         if s.icon == "🚆":
             body += [f"🚆 {s.title}:"] + lines
@@ -751,7 +759,10 @@ def sent_today(marker):
 
 def follow_up(d):
     # keep an eye on the 07:30 trips until the live notifier takes over at 07:00; ping only on a new problem
-    seen = c.sig(dict(opts=morning_trips(d)[0]))
+    try:
+        seen = c.sig(dict(opts=morning_trips(d)[0]))
+    except Exception as e:  # trains were missing from the brief, so any problem found later is news
+        print("follow-up check failed:", e); seen = set()
     while now() + timedelta(minutes=5) < hm(d, c.AM[0]):
         time.sleep(300)
         morning_trips.cache_clear()
