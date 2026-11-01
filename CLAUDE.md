@@ -12,7 +12,7 @@ They live only in repo secrets.
 | Time | What | Code |
 |---|---|---|
 | 06:45 Mon–Fri | Morning brief ping + `/brief/` page; then watches the 07:30 trips until 07:00 | `brief.py` (morning) |
-| 07:00–09:00 Mon–Fri | Live session home → work: check every 5 min, hourly status ping, instant ping on new delay/cancellation, "time to go" ping ~10 min before the first clean trip from 07:30 | `commute.py --watch` |
+| 07:00–09:00 Mon–Fri | Live session home → work: check every 5 min, hourly status ping, instant ping on a new cancellation or each delay step (+5, 10, 20, 30), quiet "back to normal" ping, one "RMV is down" / "RMV is back" pair, "time to go" ping ~10 min before the first clean trip from 07:30 | `commute.py --watch` |
 | 15:00–17:30 Mon–Fri | Live session work → home (time-to-go only if `WORK_LEAVE` is set) | `commute.py --watch` |
 | 20:00 daily | Evening heads-up for tomorrow, sent only when something needs doing. Before a workday it's the full preview (Sunday always sends). Before a weekend/holiday it only checks bins, reminders and DWD warnings | `brief.py` (evening) |
 
@@ -86,6 +86,12 @@ The user keeps reminders in a git-ignored local `reminders.txt` and uploads it w
 - **Yahoo chart closes are float32**, so compare prices loosely. CARTO basemaps now need a key, so the radar uses OpenStreetMap tiles
   + RainViewer frames (max native zoom 7) in the browser.
 - **GitHub runner** is pinned to `ubuntu-24.04`; actions are `checkout@v5`, `setup-python@v6` (Node 24).
+
+- **Live alerts:** `sig()` emits one item per delay step reached, and `watch()` keeps every item told, so a delay wobbling around a step can't
+  re-ping. A ride only counts as recovered when RMV shows the ride itself at +`CLEAR` min or less: trips drop out of RMV's list without notice,
+  so absence proves nothing. `OUTAGE` failed checks in a row send the one "down" ping; a single failed check stays silent.
+- **News:** `same_story()` merges one event across feeds (needs 3 shared words, so `NEWS_STOP` holds words that say nothing about the event).
+  Headlines of the last briefs live in `brief/news.json` on the public page, read back to skip near-identical repeats the next day.
 
 ## Testing
 

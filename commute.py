@@ -14,6 +14,7 @@ E = os.environ.get
 LEAVE_FROM, LEAVE_TO, ARRIVE_BY = E("LEAVE_FROM", "07:30"), E("LEAVE_TO", "08:00"), E("ARRIVE_BY", "08:30")
 AM, PM = (E("AM_FROM", "07:00"), E("AM_TO", "09:00")), (E("PM_FROM", "15:00"), E("PM_TO", "17:30"))
 LATE, STEP, AHEAD = 5, 5, 60
+STEPS, CLEAR, OUTAGE = (LATE, 10, 20, 30), 2, 2  # delays ping at each step, count as over at +CLEAR or less; RMV is "down" after OUTAGE failed checks
 GO_AM, GO_PM = E("BRIEF_LEAVE", "07:30"), E("WORK_LEAVE")  # when you usually head out; drives the "time to go" ping
 
 
@@ -363,20 +364,32 @@ def publish(html, path="index.html", extra=None):
                     raise
 
 
-def notify(s, new=()):
-    rec, loud = s["rec"], bool(new)
+def headline(new):
+    # one entry per ride: a jump from +6 to +25 reaches three steps at once, and only the top one is worth saying
+    top = {}
+    for n, t, w in sorted(new, key=lambda i: (i[1], i[2] if isinstance(i[2], int) else 999)):
+        top[n, t] = w
+    return ", ".join(f"{n} {T(t)} " + (f"{w}+ min late" if isinstance(w, int) else w) for (n, t), w in top.items())
+
+
+def notify(s, new=(), cleared=(), back=False):
+    rec = s["rec"]
     if new:
-        title = "⚠ " + ", ".join(f"{n} {T(t)} {w}" for n, t, w in sorted(new, key=lambda i: i[1]))
+        title = "⚠ " + headline(new)
+    elif cleared:
+        title = "✅ " + ", ".join(f"{n} {T(t)}" for n, t in sorted(cleared, key=lambda i: i[1])) + " back to normal"
     elif s["by"]:
         title = f"Leave {T(rec['leave'])} → arrive {T(rec['arr'])}" if rec else f"No clean option for {T(s['by'])}"
     else:
         title = f"{s['route']}: leave {T(rec['leave'])} → arrive {T(rec['arr'])}" if rec else f"{s['route']}: no clean trip in the next hour"
+    if back:
+        title = "RMV is back · " + title
     lines = []
     for m in [m for m in s["opts"] if not m["gone"]][:4]:
         flag = "✓" if m["ok"] else "⚠ " + (m["issues"][0][0] + " " + m["issues"][0][2] if m["issues"] else "late")
         lines.append(f"{T(m['leave'])} → {T(m['arr'])} · {' '.join(r['name'] for r in m['rides'])} {flag}")
     msg = {"topic": E("NTFY_TOPIC"), "title": title, "message": "\n".join(lines) or "No connections.",
-           "priority": 4 if loud else 3, "tags": ["warning" if loud else "train"]}
+           "priority": 4 if new else 2 if cleared else 3, "tags": ["warning" if new else "white_check_mark" if cleared or back else "train"]}
     if E("PAGE_URL"):  # a fresh URL each time so the phone can't show a cached copy of the page
         url = f"{E('PAGE_URL')}?v={now():%Y%m%d%H%M}"
         msg |= {"click": url, "actions": [{"action": "view", "label": "Details", "url": url}]}
@@ -399,9 +412,29 @@ def go_ping(s, go):
         get("https://ntfy.sh", tries=5, data=json.dumps(msg).encode(), method="POST", headers={"Content-Type": "application/json"})
 
 
+def outage(last):
+    title = "⚠ RMV is down: no live train data"
+    body = (f"Last good check {T(last)}. " if last else "") + "Delay alerts and the time-to-go ping are paused until it's back; check the RMV app."
+    print(title, body, sep="\n")
+    if E("NTFY_TOPIC"):
+        get("https://ntfy.sh", tries=5, data=json.dumps({"topic": E("NTFY_TOPIC"), "title": title, "message": body, "priority": 3, "tags": ["warning"]}).encode(),
+            method="POST", headers={"Content-Type": "application/json"})
+
+
 def sig(s):
-    # problems on trips still ahead; a delay counts once, not per extra minute
-    return frozenset(i[:2] + ("delayed" if i[2].startswith("+") else i[2],) for m in s["opts"] if not m["gone"] for i in m["issues"])
+    # problems on trips still ahead. A delay counts once per step it has reached, so +6 to +11 pings again, but +11 falling to +8 and rising again doesn't
+    out = set()
+    for m in s["opts"]:
+        if not m["gone"]:
+            for n, t, w in m["issues"]:
+                out |= {(n, t, x) for x in STEPS if x <= int(w[1:].split()[0])} if w[0] == "+" else {(n, t, w)}
+    return frozenset(out)
+
+
+def fine(s):
+    # rides seen running normally. It takes the ride itself: RMV leaving a trip out of its list says nothing about the train
+    return {(r["name"], r["pdep"]) for m in s["opts"] if not m["gone"] for r in m["rides"]
+            if not r["cancelled"] and not r["risk"] and r["delay"] <= CLEAR}
 
 
 def session():
@@ -427,13 +460,23 @@ def watch():
     back, f, t = w
     slot, end = max(hm(now().date(), f), now()), hm(now().date(), t)
     hour, seen, last_html, pub, pinged = None, None, None, datetime.min, datetime.min
+    fails, good = 0, None
     go_at, gone_off = (GO_PM if back else GO_AM), False
     while slot <= end:
         time.sleep(max(0, (slot - now()).total_seconds()))
         try:
-            s = snapshot(back, live=True)
+            try:
+                s = snapshot(back, live=True)
+            except Exception:  # one failed check is a blip; two in a row are worth one ping, and silence until it's back
+                fails += 1
+                if fails == OUTAGE:
+                    outage(good)
+                raise
+            restored, fails, good = fails >= OUTAGE, 0, now()
             k = sig(s)
             new = k - seen if seen is not None else frozenset()
+            told = {i[:2] for i in seen or ()}
+            cleared = told & fine(s) - {i[:2] for i in k}
             # hourly status, but not within 30 min of the last ping (a late start just before the hour)
             hourly = slot.hour != hour and slot - pinged >= timedelta(minutes=30)
             if go_at and not gone_off:
@@ -441,9 +484,10 @@ def watch():
                 go = next((m for m in s["opts"] if m["ok"] and not m["gone"] and m["leave"] >= t0), None)
                 if go and now() >= t0 - timedelta(minutes=30) and go["leave"] - now() <= timedelta(minutes=12):
                     go_ping(s, go); gone_off, hourly = True, False  # not a status ping on top of it in the same check
-            if new or hourly:  # or straight away when a new problem shows up
-                notify(s, new); pinged = slot
-            hour, seen = slot.hour, k
+            if new or cleared or hourly or restored:  # or straight away when something changes
+                notify(s, new, cleared, restored); pinged = slot
+            # remembers every step told, so a delay never pings twice; a ride that recovered starts over if it goes wrong again
+            hour, seen = slot.hour, frozenset(i for i in (seen or frozenset()) | k if i[:2] not in cleared)
             html = render(s)
             # Pages allows ~10 builds an hour, so only republish every 10 min unless a problem appeared
             if re.sub(r"as of \d\d:\d\d", "", html) != re.sub(r"as of \d\d:\d\d", "", last_html or "") and (new or now() - pub >= timedelta(minutes=10)):
