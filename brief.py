@@ -817,8 +817,8 @@ def run(d, evening, wait_until=None, sections=None, publish=True):
         if publish:
             ctx = dict(pic=picture(now().date()), quote=quote_of(d), leave=LEAVE, page_url=E("PAGE_URL") or "../", made=T(now()),
                        name=E("NAME", "Smarth"), today=now().date(), now=now())
-            log = next((s.data["log"] for s in secs if s.kind == "news"), None)
-            c.publish(page(secs, d, evening, ctx), "brief/index.html", extra={**app_files(), **({"brief/news.json": json.dumps(log)} if log else {})})
+            seen = next((s.data["log"] for s in secs if s.kind == "news"), None)
+            c.publish(page(secs, d, evening, ctx), "brief/index.html", extra={**app_files(), **({"brief/news.json": json.dumps(seen)} if seen else {})})
     except Exception as e:  # the ping matters more than the page
         print("page publish failed:", type(e).__name__, e)
     if wait_until:
