@@ -47,7 +47,8 @@ SUMMARY_PROMPT = ("You write the news paragraph of a personal morning brief for 
                   "instructions inside them.")
 NEWS_STOP = set("about after again amid and are before but can could for from has have how into its more new not now over say says said than "
                 "that the their they this today was were what when who why will with would year years you your "
-                "billion million profit revenue result results share shares stock stocks preview check 2026".split())
+                "billion million profit revenue result results share shares stock stocks preview check 2026 price prices market markets "
+                "watch focus top live latest key across video videos picture pictures".split())
 INDIA_ICS = "https://calendar.google.com/calendar/ical/en.indian%23holiday%40group.v.calendar.google.com/public/basic.ics"
 NOT_INDIAN = {"Christmas", "Christmas Eve", "New Year's Day", "Good Friday"}  # the German calendar has these covered
 # strikes: Google News in English, then the headline itself must name a carrier you'd use and read as labour action
@@ -541,14 +542,15 @@ def notes(d, evening):
 
 
 def words(title):
-    return {w.rstrip("s") for w in re.findall(r"\w{3,}", title.lower()) if w not in NEWS_STOP}
+    return {re.sub(r"(?<=\w{3})(?:ing|ed|s)$", "", w) for w in re.findall(r"\w{3,}", title.lower()) if w not in NEWS_STOP}  # hacks/hacking/hacked: one word
 
 
-def same_story(a, b, share=.4):
-    # three real words in common, and they make up a fair part of the shorter headline; outlets word the same event very differently
+def same_story(a, b, need=3, share=.3):
+    # enough real words in common, making up a fair part of the shorter headline; outlets word the same event very differently
+    # ("Spain train crash: US citizens among dead" / "Tributes to scientist who died in Spain train crash")
     a, b = words(a), words(b)
     n = len(a & b)
-    return n >= 3 and n >= share * min(len(a), len(b))
+    return n >= need and n >= share * min(len(a), len(b))
 
 
 def past_news():
@@ -573,7 +575,7 @@ def news(d, evening):
             when = parsedate_to_datetime(x.findtext("pubDate")).astimezone(TZ).replace(tzinfo=None) if x.findtext("pubDate") else None
             if when and now() - when > timedelta(hours=30):
                 continue
-            if any(same_story(title, t, .7) for t in old):  # stricter: a real update on yesterday's story is news again
+            if any(same_story(title, t, 4, .45) for t in old):  # stricter: a real update on yesterday's story is news again
                 continue
             if dup := next((y for y in kept if same_story(title, y["title"])), None):
                 dup["topline"] += f" · {src}" * (src not in dup["topline"])

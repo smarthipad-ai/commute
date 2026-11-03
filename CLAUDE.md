@@ -85,12 +85,16 @@ The user keeps reminders in a git-ignored local `reminders.txt` and uploads it w
   `brief.local_times()` re-anchors them.
 - **Yahoo chart closes are float32**, so compare prices loosely. CARTO basemaps now need a key, so the radar uses OpenStreetMap tiles
   + RainViewer frames (max native zoom 7) in the browser.
+- **RMV blocks GitHub's runners for hours at a time** (seen 29 Oct and 2–3 Nov 2026): TCP to www.rmv.de times out from every Azure runner
+  tried, while Open-Meteo/DWD answer and RMV works from a home connection. A fresh runner doesn't help. v6.db.transport.rest also timed out
+  and bahn.de's API returns 403, so neither is a fallback. The code degrades (`get()` skips a dead host for 10 min, weather falls back
+  to central Frankfurt, one "RMV is down" ping) but has no train data while it lasts.
 - **GitHub runner** is pinned to `ubuntu-24.04`; actions are `checkout@v5`, `setup-python@v6` (Node 24).
 
 - **Live alerts:** `sig()` emits one item per delay step reached, and `watch()` keeps every item told, so a delay wobbling around a step can't
   re-ping. A ride only counts as recovered when RMV shows the ride itself at +`CLEAR` min or less: trips drop out of RMV's list without notice,
   so absence proves nothing. `OUTAGE` failed checks in a row send the one "down" ping; a single failed check stays silent.
-- **News:** `same_story()` merges one event across feeds (needs 3 shared words, so `NEWS_STOP` holds words that say nothing about the event).
+- **News:** `same_story()` merges one event across feeds (3 shared words, 30% of the shorter headline; 4 words and 45% against the last briefs), so `NEWS_STOP` holds words that say nothing about the event.
   Headlines of the last briefs live in `brief/news.json` on the public page, read back to skip near-identical repeats the next day.
 
 ## Testing
