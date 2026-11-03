@@ -55,7 +55,8 @@ Required secrets: `RMV_KEY`, `NTFY_TOPIC`, `HOME_ADDR`, `WORK_ADDR`.
 Optional secrets: `REMINDERS` (format in `brief.reminders()` docstring), `GCAL_ICS` (Google Calendar secret iCal URL),
 `FES_ICS` (FrankfurtPlus bin calendar iCal), `WATCHLIST` (`SYMBOL:Label, …`, Yahoo Finance symbols),
 `GEMINI_API_KEY` (free-tier Google AI Studio key for the news summary; without it the News card shows headlines only).
-Optional repo variables: `FX` (default `INR`), `WORK_LEAVE` (e.g. `17:00`), `GEMINI_MODEL` (default `gemini-3.5-flash-lite`,
+`RMV_RELAY` + `RMV_RELAY_KEY` (URL of the Cloudflare Worker in `relay/worker.js` and its shared key; RMV calls go through it first and
+fall back to RMV directly). Optional repo variables: `FX` (default `INR`), `WORK_LEAVE` (e.g. `17:00`), `GEMINI_MODEL` (default `gemini-3.5-flash-lite`,
 falls back to `gemini-3.8-flash`, which is slower).
 The user keeps reminders in a git-ignored local `reminders.txt` and uploads it with `gh secret set REMINDERS < reminders.txt`.
 
@@ -88,7 +89,8 @@ The user keeps reminders in a git-ignored local `reminders.txt` and uploads it w
 - **RMV blocks GitHub's runners for hours at a time** (seen 29 Oct and 2–3 Nov 2026): TCP to www.rmv.de times out from every Azure runner
   tried, while Open-Meteo/DWD answer and RMV works from a home connection. A fresh runner doesn't help. v6.db.transport.rest also timed out
   and bahn.de's API returns 403, so neither is a fallback. The code degrades (`get()` skips a dead host for 10 min, weather falls back
-  to central Frankfurt, one "RMV is down" ping) but has no train data while it lasts.
+  to central Frankfurt, one "RMV is down" ping). The fix is the Cloudflare relay: `relay/worker.js`, deployed in the user's free
+  Cloudflare account with a `RELAY_KEY` secret matching the repo's `RMV_RELAY_KEY`. `hapi()` uses it when `RMV_RELAY` is set.
 - **GitHub runner** is pinned to `ubuntu-24.04`; actions are `checkout@v5`, `setup-python@v6` (Node 24).
 
 - **Live alerts:** `sig()` emits one item per delay step reached, and `watch()` keeps every item told, so a delay wobbling around a step can't

@@ -71,7 +71,13 @@ def get(url, tries=3, timeout=30, **kw):
 
 
 def hapi(ep, **p):
-    return json.loads(get(f"{API}/{ep}?" + urlencode({"accessId": E("RMV_KEY"), "format": "json", **p})))
+    q = f"/{ep}?" + urlencode({"accessId": E("RMV_KEY"), "format": "json", **p})
+    if E("RMV_RELAY"):  # RMV blocks GitHub's runners for hours at a time; the Cloudflare relay (relay/worker.js) asks from elsewhere
+        try:
+            return json.loads(get(E("RMV_RELAY").rstrip("/") + "/hapi" + q, headers={"x-relay-key": E("RMV_RELAY_KEY", "")}))
+        except Exception as e:
+            print("RMV relay failed, trying RMV directly:", type(e).__name__, e)
+    return json.loads(get(API + q))
 
 
 def lookup(q, n=1):

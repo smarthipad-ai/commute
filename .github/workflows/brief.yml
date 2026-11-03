@@ -34,6 +34,8 @@ jobs:
           python brief.py ${{ inputs.evening && '--evening' || '' }}
         env:
           RMV_KEY: ${{ secrets.RMV_KEY }}
+          RMV_RELAY: ${{ secrets.RMV_RELAY }}
+          RMV_RELAY_KEY: ${{ secrets.RMV_RELAY_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           HOME_ADDR: ${{ secrets.HOME_ADDR }}
           WORK_ADDR: ${{ secrets.WORK_ADDR }}
